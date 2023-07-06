@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.13)
+include(pico_sdk_import.cmake)
+project(smd_pico_controller)
+pico_sdk_init()
+
+add_executable(smd_pico_controller)
+pico_generate_pio_header(smd_pico_controller ${CMAKE_CURRENT_LIST_DIR}/low_level_controller.pio)
+target_sources(smd_pico_controller PRIVATE controller.c)
+target_link_libraries(smd_pico_controller PRIVATE pico_stdlib hardware_pio)
+pico_add_extra_outputs(smd_pico_controller)

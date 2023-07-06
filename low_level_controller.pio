@@ -1,0 +1,14 @@
+.program low_level_controller
+; TODO
+;  - should read from "READ DATA", clocked by "READ CLOCK", from B-cable
+;  - input signal is expected to be 9.67MHz, so the default 125MHz clkfreq of
+;    the Pico should be just fine (since we'll be driven by READ CLOCK anyway)
+;  - it's possible it should listen on "INDEX", "SECTOR", and "ADDRESS MARK"
+;    too?
+
+again:
+    jmp again
+
+% c-sdk {
+// TODO?
+%}
