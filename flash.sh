@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 if [ -z "$1" ] ; then
 	echo "Usage: $0 </path/to/blockdevice>" > /dev/stderr
+	echo "(sudo's a lot; you may want to have a look inside before running)"
 	exit 1
 fi
 cd $(dirname $0)
