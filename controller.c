@@ -12,10 +12,11 @@
 #include "pico/unique_id.h"
 
 // local
+#include "config.h"
 #include "util.h"
 #include "low_level_controller.pio.h"
 
-const uint LED_PIN = PICO_DEFAULT_LED_PIN;
+const uint LED_PIN = PICO_DEFAULT_LED_PIN; // GP25
 static void set_led(int x)
 {
 	gpio_put(LED_PIN, !!x);
@@ -118,11 +119,28 @@ static void cmd_led(union arg* args)
 	set_led(v);
 }
 
+static inline int gpio_type_to_dir(enum gpio_type t)
+{
+	switch (t) {
+	case DATA:     return GPIO_IN;
+	case STATUS:   return GPIO_IN;
+	case CTRL:     return GPIO_OUT;
+	default: PANIC(PANIC_XXX);
+	}
+}
+
 int main()
 {
 	gpio_init(LED_PIN);
 	gpio_set_dir(LED_PIN, GPIO_OUT);
 	gpio_put(LED_PIN, 0);
+
+	#define PIN(TYPE, NAME, GPN) \
+		gpio_init(GPN); \
+		gpio_set_dir(GPN, gpio_type_to_dir(TYPE)); \
+		if (gpio_type_to_dir(TYPE) == GPIO_OUT) gpio_put(GPN, 0);
+	PINS
+	#undef PIN
 
 	stdio_init_all();
 	multicore_launch_core1(core1_entry);
