@@ -14,7 +14,12 @@ pico_enable_stdio_usb(${PROJECT_NAME} 1)
 pico_enable_stdio_uart(${PROJECT_NAME} 0)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_LIST_DIR})
-target_link_libraries(${PROJECT_NAME} PRIVATE pico_stdlib hardware_pio pico_unique_id)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+	pico_stdlib
+	pico_multicore
+	hardware_pio
+	pico_unique_id
+)
 pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/low_level_controller.pio)
 pico_add_extra_outputs(${PROJECT_NAME})
 target_compile_definitions(${PROJECT_NAME} PRIVATE PICO_ENTER_USB_BOOT_ON_EXIT=1)

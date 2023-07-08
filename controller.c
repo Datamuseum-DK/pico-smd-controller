@@ -6,6 +6,7 @@
 // deps
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "pico/unique_id.h"
 
 // local
@@ -64,6 +65,15 @@ static void PANIC(uint32_t error)
 	}
 }
 
+unsigned core1_counter = 0;
+void core1_entry() {
+	for (;;) {
+		core1_counter++;
+		sleep_ms(1);
+		tight_loop_contents();
+	}
+}
+
 int main()
 {
 	gpio_init(LED_PIN);
@@ -71,11 +81,19 @@ int main()
 	gpio_put(LED_PIN, 0);
 
 	stdio_init_all();
+	multicore_launch_core1(core1_entry);
 
 	blink(50, 0); // "Hi, we're up!"
 
+	int chars_received = 0;
 	for (;;) {
-		printf("hello world!\r\n");
+		for (;;) {
+			int ch = getchar_timeout_us(0);
+			if (ch == PICO_ERROR_TIMEOUT || ch == 0) break;
+			printf("  got char [%d]\n", ch);
+			chars_received++;
+		}
+		printf("hello world! nch=%d c1c=%d\r\n", chars_received, core1_counter);
 		sleep_ms(500);
 	}
 
