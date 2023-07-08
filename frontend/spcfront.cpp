@@ -2,12 +2,15 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/select.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #include <unistd.h>
 #include <pthread.h>
 
@@ -23,26 +26,59 @@
 
 int tty_fd = -1;
 
-struct term {
-	char* line_arr;
-} term;
+struct com {
+	char* recv_line_arr;
+	pthread_mutex_t queue_mutex;
+	char** queue_arr;
+} com;
 
-static void term_putc(char ch)
+static void com_recv_char(char ch)
 {
 	if (ch == '\r' || ch == '\n') {
-		if (arrlen(term.line_arr) > 0) {
-			arrput(term.line_arr, 0);
-			printf("got [%s] from tty\n", term.line_arr);
-			arrsetlen(term.line_arr, 0);
+		if (arrlen(com.recv_line_arr) > 0) {
+			arrput(com.recv_line_arr, 0);
+			printf("got [%s] from tty\n", com.recv_line_arr);
+			arrsetlen(com.recv_line_arr, 0);
 		}
 	} else {
-		arrput(term.line_arr, ch);
+		arrput(com.recv_line_arr, ch);
 	}
 }
 
-static int term_has_pending_writes(void)
+__attribute__((format(printf, 1, 2)))
+static void com_enqueue(const char* fmt, ...)
 {
-	return 0; // TODO
+	char buf[1<<16];
+	va_list ap;
+	va_start(ap, fmt);
+	int n = vsnprintf(buf, sizeof buf, fmt, ap);
+	va_end(ap);
+	char* s = (char*)malloc(n+1);
+	memcpy(s, buf, n+1);
+	pthread_mutex_lock(&com.queue_mutex);
+	arrput(com.queue_arr, s);
+	pthread_mutex_unlock(&com.queue_mutex);
+}
+
+// caller should free return value when done with it
+static char* com_shift(void)
+{
+	char* c = NULL;
+	pthread_mutex_lock(&com.queue_mutex);
+	if (arrlen(com.queue_arr) > 0) {
+		c = com.queue_arr[0];
+		arrdel(com.queue_arr, 0);
+	}
+	pthread_mutex_unlock(&com.queue_mutex);
+	return c;
+}
+
+static int com_has_pending_writes(void)
+{
+	pthread_mutex_lock(&com.queue_mutex);
+	int p = arrlen(com.queue_arr) > 0;
+	pthread_mutex_unlock(&com.queue_mutex);
+	return p;
 }
 
 void* io_thread_start(void* arg)
@@ -58,7 +94,7 @@ void* io_thread_start(void* arg)
 		FD_SET(tty_fd, &rfds);
 
 		FD_ZERO(&wfds);
-		if (term_has_pending_writes()) {
+		if (com_has_pending_writes()) {
 			FD_SET(tty_fd, &wfds);
 		}
 
@@ -82,11 +118,16 @@ void* io_thread_start(void* arg)
 				fprintf(stderr, "tty: %s\n", strerror(errno));
 				exit(EXIT_FAILURE);
 			}
-			for (int i = 0; i < n; i++) term_putc(buf[i]);
+			for (int i = 0; i < n; i++) com_recv_char(buf[i]);
 		}
 
 		if (FD_ISSET(tty_fd, &wfds)) {
-			assert(!"TODO term write");
+			char* c = com_shift();
+			assert((c != NULL) && "expected to shift command");
+			size_t n = strlen(c);
+			assert(write(tty_fd, c, n) != -1);
+			free(c);
+			assert(write(tty_fd, "\r\n", 2) != -1);
 		}
 	}
 	return NULL;
@@ -109,29 +150,38 @@ int main(int argc, char** argv)
 
 	const char* tty_path = argv[1];
 
-	//tty_fd = open(tty_path, O_RDWR | O_NOCTTY | O_NONBLOCK);
-	tty_fd = open(tty_path, O_RDWR | O_NOCTTY);
-	if (tty_fd == -1) {
-		fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	if (!isatty(tty_fd)) {
-		fprintf(stderr, "%s: not a tty\n", tty_path);
-		assert(close(tty_fd) == 0);
-		exit(EXIT_FAILURE);
-	}
-
-	if (flock(tty_fd, LOCK_EX | LOCK_NB) == -1) {
-		if (errno == EWOULDBLOCK) {
-			fprintf(stderr, "%s: already locked by another process\n", tty_path);
-		} else {
+	{
+		tty_fd = open(tty_path, O_RDWR | O_NOCTTY);
+		if (tty_fd == -1) {
 			fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
+			exit(EXIT_FAILURE);
 		}
-		exit(EXIT_FAILURE);
+
+		if (!isatty(tty_fd)) {
+			fprintf(stderr, "%s: not a tty\n", tty_path);
+			assert(close(tty_fd) == 0);
+			exit(EXIT_FAILURE);
+		}
+
+		if (flock(tty_fd, LOCK_EX | LOCK_NB) == -1) {
+			if (errno == EWOULDBLOCK) {
+				fprintf(stderr, "%s: already locked by another process\n", tty_path);
+			} else {
+				fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
+			}
+			exit(EXIT_FAILURE);
+		}
+
+		{
+			struct termios t;
+			tcgetattr(tty_fd, &t);
+			t.c_lflag &= ~(ICANON | ECHO);
+			tcsetattr(tty_fd, TCSANOW, &t);
+		}
 	}
 
 	// TODO do handshake before starting thread?
+	pthread_mutex_init(&com.queue_mutex, NULL);
 	pthread_t io_thread;
 	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);
 
@@ -167,6 +217,7 @@ int main(int argc, char** argv)
 	ImGui_ImplSDL2_InitForOpenGL(window, glctx);
 	ImGui_ImplOpenGL2_Init();
 
+	int XXXLED = 0;
 	int exiting = 0;
 	while (!exiting) {
 		SDL_Event ev;
@@ -184,6 +235,10 @@ int main(int argc, char** argv)
 
 		ImGui::Begin("Hello, world!");
 		ImGui::Text("This is some useful text.");
+		if (ImGui::Button("Toggle LED")) {
+			XXXLED = !XXXLED;
+			com_enqueue("led %d", XXXLED);
+		}
 		ImGui::End();
 
 		ImGui::Render();
