@@ -218,18 +218,16 @@ int main()
 			token_index++;
 		}
 
-		if (got_line) {
-			if (!line_error) {
-				const int n_args = token_index-1;
-				if (n_args != argfmt_length) {
-					printf("[ERR] too few arguments for command '%s' (expected %d; got %d)\n", cmd2str(cmd), argfmt_length, n_args);
-				} else {
-					switch (cmd) {
-					#define CMD(NAME, ARGFMT) case CMD_ ## NAME: cmd_##NAME(args); break;
-					COMMANDS
-					#undef CMD
-					default: PANIC(PANIC_UNREACHABLE);
-					}
+		if (got_line && !line_error) {
+			const int n_args = token_index-1;
+			if (n_args != argfmt_length) {
+				printf("[ERR] too few arguments for command '%s' (expected %d; got %d)\n", cmd2str(cmd), argfmt_length, n_args);
+			} else {
+				switch (cmd) {
+				#define CMD(NAME, ARGFMT) case CMD_ ## NAME: cmd_##NAME(args); break;
+				COMMANDS
+				#undef CMD
+				default: PANIC(PANIC_UNREACHABLE);
 				}
 			}
 		}
