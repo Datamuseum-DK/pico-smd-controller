@@ -413,6 +413,8 @@ int main(int argc, char** argv)
 	ImGui_ImplSDL2_InitForOpenGL(window, glctx);
 	ImGui_ImplOpenGL2_Init();
 
+	float status_scope_scale = 7.5;
+
 	int XXXLED = 0;
 	int exiting = 0;
 	while (!exiting) {
@@ -433,22 +435,20 @@ int main(int argc, char** argv)
 
 		{ // controller status window
 			ImGui::Begin("Controller Status");
-			ImGui::Text("Uptime: %.1fs", (double)com.controller_timestamp_us * 1e-6);
+			const uint64_t now_us = com.controller_timestamp_us;
+			ImGui::Text("Uptime: %.1fs", (double)now_us * 1e-6);
 
-			if (ImGui::Button("Toggle LED")) {
-				XXXLED = !XXXLED;
-				com_enqueue("led %d", XXXLED);
-			}
+			ImGui::SliderFloat("scale", &status_scope_scale, 1.0f, 60.0f, "%.1f seconds");
 
 			const int n_rows = arrlen(com.status_descriptor_arr);
 			const int n_columns = 2;
 			if (ImGui::BeginTable("table", n_columns)) {
 				ImGui::TableSetupColumn("0", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableSetupColumn("1", ImGuiTableColumnFlags_WidthFixed);
-				unsigned mask = 1;
 				const struct controller_status* cs = com.controller_status_arr;
 				const int ncs = arrlen(cs);
-				for (int row = 0; row < n_rows; row++) {
+				unsigned mask = 1;
+				for (int row = 0; row < n_rows; row++, mask <<= 1) {
 					const char* s = com.status_descriptor_arr[row];
 					ImU32 st0col = get_status_color(s, 0);
 					ImU32 st1col = get_status_color(s, 1);
@@ -456,21 +456,33 @@ int main(int argc, char** argv)
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
 
-					{
-						ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
-						ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
-						ImVec2 canvas_p1 = ImVec2(canvas_p0.x+(canvas_sz.x), canvas_p0.y+13);
+					if (ncs > 0) {
+						ImVec2 area_p0 = ImGui::GetCursorScreenPos();
+						ImVec2 area_sz = ImGui::GetContentRegionAvail();
 						ImDrawList* draw_list = ImGui::GetWindowDrawList();
-						draw_list->AddRectFilled(canvas_p0, canvas_p1, st1col);
+						float x_right = area_p0.x+area_sz.x;
+						for (int cursor = ncs-1; cursor >= 0; cursor--) {
+							const struct controller_status* st = &cs[cursor];
+							const double ts = st->timestamp_us;
+							const double ts1 = now_us;
+							const double ts0 = ts1 - status_scope_scale * 1e6;
+							const double q = (ts-ts0) / (ts1-ts0);
+							const float x_left = area_p0.x + area_sz.x*q;
+							if (st->status & mask) {
+								draw_list->AddRectFilled(
+									ImVec2(x_left, area_p0.y),
+									ImVec2(x_right, area_p0.y+13),
+									st1col);
+							}
+							x_right = x_left;
+							if (x_right < area_p0.x) break;
+						}
 					}
 
 					ImGui::TableSetColumnIndex(1);
-					const int on = (ncs > 0) && (cs[ncs-1].status & mask);
-					ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, on ? st1col : st0col);
+					const int is_on = (ncs > 0) && (cs[ncs-1].status & mask);
+					ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, is_on ? st1col : st0col);
 					ImGui::Text("%s", s);
-					//ImGui::TextColored(ImVec4(0,0,0,1), "%s", s);
-
-					mask <<= 1;
 				}
 				ImGui::EndTable();
 			}
@@ -491,6 +503,15 @@ int main(int argc, char** argv)
 				}
 			}
 			clipper.End();
+			ImGui::End();
+		}
+
+		{ // controller control
+			ImGui::Begin("Controller Control");
+			if (ImGui::Button("Toggle LED")) {
+				XXXLED = !XXXLED;
+				com_enqueue("led %d", XXXLED);
+			}
 			ImGui::End();
 		}
 
