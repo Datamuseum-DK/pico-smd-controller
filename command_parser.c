@@ -36,7 +36,7 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 		if (parser->token_buffer_cursor < sizeof(parser->token_buffer)) {
 			parser->token_buffer[parser->token_buffer_cursor++] = write_token_char;
 		} else {
-			printf(CTPP_ERROR "token too long (exceeded %zd bytes)\n", sizeof(parser->token_buffer));
+			printf(CPPP_ERROR "token too long (exceeded %zd bytes)\n", sizeof(parser->token_buffer));
 			parser->line_error = 1;
 		}
 	}
@@ -59,7 +59,7 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 			#undef COMMAND
 
 			if (!found_command) {
-				printf(CTPP_ERROR "invalid command '%s'\n", parser->token_buffer);
+				printf(CPPP_ERROR "invalid command '%s'\n", parser->token_buffer);
 				parser->line_error = 1;
 			} else {
 				parser->argfmt_length = strlen(parser->argfmt);
@@ -67,7 +67,7 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 		} else {
 			const int arg_index = parser->token_index-1;
 			if (arg_index >= parser->argfmt_length || arg_index >= COMMAND_MAX_ARGS) {
-				printf(CTPP_ERROR "too many arguments for command '%s' (expected %d)\n", command_to_string(parser->command), parser->argfmt_length);
+				printf(CPPP_ERROR "too many arguments for command '%s' (expected %d)\n", command_to_string(parser->command), parser->argfmt_length);
 				parser->line_error = 1;
 			} else {
 				union command_argument* arg = &parser->arguments[arg_index];
@@ -90,7 +90,7 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 	if (!parser->line_error && got_line) {
 		const int n_args = parser->token_index-1;
 		if (n_args != parser->argfmt_length) {
-			printf(CTPP_ERROR "too few arguments for command '%s' (expected %d; got %d)\n", command_to_string(parser->command), parser->argfmt_length, n_args);
+			printf(CPPP_ERROR "too few arguments for command '%s' (expected %d; got %d)\n", command_to_string(parser->command), parser->argfmt_length, n_args);
 		} else {
 			reset_parser(parser);
 			return 1;
@@ -135,17 +135,19 @@ int main(int argc, char** argv)
 	reset_parser(&command_parser);
 	try_parse("get_status_descriptors\r\n", COMMAND_get_status_descriptors);
 	try_parse("led 0\n", COMMAND_led);
+	assert(!command_parser.arguments[0].b);
 	try_parse("led 1\n", COMMAND_led);
+	assert(command_parser.arguments[0].b);
 	try_parse("\n\r\nled 0\n\n\n", COMMAND_led);
-	try_parse("led   \t 555\n", COMMAND_led);
-	assert(command_parser.arguments[0].u == 555);
+	try_parse("led  \t 555\n", COMMAND_led);
+	assert(command_parser.arguments[0].b);
 	try_parse(" led    666  \n", COMMAND_led);
-	assert(command_parser.arguments[0].u == 666);
+	assert(command_parser.arguments[0].b);
 	try_parse("led 420\n\n", COMMAND_led);
+	assert(command_parser.arguments[0].b);
 	try_parse("get_status_descriptors\n", COMMAND_get_status_descriptors);
-	assert(command_parser.arguments[0].u == 420);
-	try_parse("subscribe 424242\n", COMMAND_subscribe);
-	assert(command_parser.arguments[0].u == 424242);
+	try_parse("subscribe_to_status 424242\n", COMMAND_subscribe_to_status);
+	assert(command_parser.arguments[0].b);
 	printf("OK\n");
 }
 

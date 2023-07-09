@@ -68,14 +68,17 @@ struct controller_status {
 };
 
 struct com {
+	char** status_descriptor_arr;
+	struct cond ready_cond;
+
 	int fd;
 	char* tty_path;
 	char* recv_line_arr;
 	pthread_mutex_t queue_mutex;
 	char** queue_arr;
+
+	pthread_rwlock_t rwlock;
 	char** controller_log;
-	char** status_descriptor_arr;
-	struct cond ready_cond;
 	struct controller_status* controller_status_arr;
 	uint64_t controller_timestamp_us;
 } com;
@@ -90,6 +93,12 @@ static int starts_with(char* s, const char* prefix)
 	return 1;
 }
 
+static int is_payload(char* s, const char* cppp)
+{
+	size_t ncppp = strlen(cppp);
+	return starts_with(s, cppp) && (s[ncppp] == ' ' || s[ncppp] == 0);
+}
+
 static char* duplicate_string(char* s) // strdup() is deprecated?
 {
 	const size_t sz = strlen(s)+1;
@@ -98,24 +107,32 @@ static char* duplicate_string(char* s) // strdup() is deprecated?
 	return (char*)p;
 }
 
+static void bad_msg(char* msg)
+{
+	printf("WARNING: garbage message from controller: [%s]\n", msg);
+}
+
 static void com__handle_msg(char* msg)
 {
-	if (starts_with(msg, CTPP_LOG)) {
-		printf("(CTRLOG) %s\n", msg);
+	if (starts_with(msg, CPPP_LOG)) {
+		printf("(CTRL) %s\n", msg);
 		msg = duplicate_string(msg);
+		pthread_rwlock_wrlock(&com.rwlock);
 		arrput(com.controller_log, msg);
-	} else if (starts_with(msg, CTPP_STATUS_DESCRIPTORS)) {
+		pthread_rwlock_unlock(&com.rwlock);
+	} else if (is_payload(msg, CPPP_STATUS_DESCRIPTORS)) {
 		assert((com.status_descriptor_arr == NULL) && "seen twice? that's probably not thread-safe...");
-		char* p = msg + strlen(CTPP_STATUS_DESCRIPTORS);
+		char* p = msg + strlen(CPPP_STATUS_DESCRIPTORS);
+		//printf("%s\n", p);
 		for (;;) {
 			char c = *p;
 			if (c == 0) break;
-			assert(c == ':');
+			assert(c == ' ');
 			p++;
 			char* p0 = p;
 			for (;;) {
 				char c2 = *(p++);
-				if (c2 == ':' || c2 == 0) {
+				if (c2 == ' ' || c2 == 0) {
 					p--;
 					break;
 				}
@@ -129,14 +146,35 @@ static void com__handle_msg(char* msg)
 			}
 			cond_signal(&com.ready_cond);
 		}
-	} else if (starts_with(msg, CTPP_STATUS)) {
-		char* p = msg + strlen(CTPP_STATUS);
-		printf("TODO [%s]\n", msg);
-	} else if (starts_with(msg, CTPP_STATUS_TIME)) {
-		char* p = msg + strlen(CTPP_STATUS_TIME);
-		printf("TODO [%s]\n", msg);
+	} else if (is_payload(msg, CPPP_STATUS)) {
+		char* p = msg + strlen(CPPP_STATUS);
+		uint64_t timestamp_us = 0;
+		uint32_t status = 0;
+		if (sscanf(p, " %lu %u", &timestamp_us, &status) == 2) {
+			struct controller_status s;
+			s.timestamp_us = timestamp_us;
+			s.status = status;
+			pthread_rwlock_wrlock(&com.rwlock);
+			arrput(com.controller_status_arr, s);
+			if (timestamp_us > com.controller_timestamp_us) {
+				com.controller_timestamp_us = timestamp_us;
+			}
+			pthread_rwlock_unlock(&com.rwlock);
+		} else {
+			bad_msg(msg);
+		}
+	} else if (is_payload(msg, CPPP_STATUS_TIME)) {
+		char* p = msg + strlen(CPPP_STATUS_TIME);
+		uint64_t timestamp_us;
+		if (sscanf(p, " %lu", &timestamp_us) == 1) {
+			pthread_rwlock_wrlock(&com.rwlock);
+			if (timestamp_us > com.controller_timestamp_us) com.controller_timestamp_us = timestamp_us;
+			pthread_rwlock_unlock(&com.rwlock);
+		} else {
+			bad_msg(msg);
+		}
 	} else {
-		printf("WARNING: garbage message from controller: [%s]\n", msg);
+		bad_msg(msg);
 	}
 }
 
@@ -281,6 +319,8 @@ static void com_startup(char* tty_path)
 	pthread_t io_thread;
 	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);
 
+	assert(pthread_rwlock_init(&com.rwlock, NULL) == 0);
+
 	printf("COM: waiting for handshake...\n");
 	cond_wait_nonzero(&com.ready_cond);
 	printf("COM: ready!\n");
@@ -300,6 +340,35 @@ static void SDL2FATAL(void)
 {
 	fprintf(stderr, "SDL2: %s\n", SDL_GetError());
 	exit(EXIT_FAILURE);
+}
+
+static ImU32 get_status_color(const char* nm, int st)
+{
+	//INDEX SECTOR FAULT SEEK_ERROR ON_CYLINDER UNIT_READY ADDRESS_MARK UNIT_SELECTED SEEK_END
+	double r,g,b;
+	if (strcmp(nm, "FAULT") == 0 || strcmp(nm, "SEEK_ERROR") == 0) {
+		r = 0.8;
+		g = 0.2;
+		b = 0;
+	} else if (strcmp(nm, "ON_CYLINDER") == 0 || strcmp(nm, "UNIT_READY") == 0 || strcmp(nm, "UNIT_SELECTED") == 0 || strcmp(nm, "SEEK_END") == 0) {
+		r = 0.2;
+		g = 0.5;
+		b = 0;
+	} else {
+		r = 0.5;
+		g = 0.6;
+		b = 1.0;
+	}
+
+	double m = 1.0;
+	if (st == 0) {
+		m = 0.2;
+	} else if (st == 1) {
+		m = 1.0;
+	} else {
+		assert(!"UNREACHABLE");
+	}
+	return ImGui::GetColorU32(ImVec4(r*m, g*m, b*m, 1.0));
 }
 
 int main(int argc, char** argv)
@@ -360,22 +429,62 @@ int main(int argc, char** argv)
 		ImGui_ImplSDL2_NewFrame();
 		ImGui::NewFrame();
 
-		ImGui::Begin("Hello, world!");
-		ImGui::Text("This is some useful text.");
-		if (ImGui::Button("Toggle LED")) {
-			XXXLED = !XXXLED;
-			com_enqueue("led %d", XXXLED);
-		}
-		if (ImGui::Button("STAT")) {
-			com_enqueue("stat");
+		pthread_rwlock_rdlock(&com.rwlock);
+
+		{ // controller status window
+			ImGui::Begin("Controller Status");
+			ImGui::Text("Uptime: %.1fs", (double)com.controller_timestamp_us * 1e-6);
+
+			if (ImGui::Button("Toggle LED")) {
+				XXXLED = !XXXLED;
+				com_enqueue("led %d", XXXLED);
+			}
+
+			const int n_rows = arrlen(com.status_descriptor_arr);
+			const int n_columns = 2;
+			if (ImGui::BeginTable("table", n_columns)) {
+				unsigned mask = 1;
+				const struct controller_status* cs = com.controller_status_arr;
+				const int ncs = arrlen(cs);
+				for (int row = 0; row < n_rows; row++) {
+					const char* s = com.status_descriptor_arr[row];
+					ImU32 st0col = get_status_color(s, 0);
+					ImU32 st1col = get_status_color(s, 1);
+
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::Text("TODO");
+					ImGui::TableSetColumnIndex(1);
+					const int on = (ncs > 0) && (cs[ncs-1].status & mask);
+					ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, on ? st1col : st0col);
+					ImGui::Text("%s", s);
+					//ImGui::TextColored(ImVec4(0,0,0,1), "%s", s);
+
+					mask <<= 1;
+				}
+				ImGui::EndTable();
+			}
+
+			ImGui::End();
 		}
 
-		for (int i = 0; i < arrlen(com.status_descriptor_arr); i++) {
-			const char* s = com.status_descriptor_arr[i];
-			ImGui::BulletText("%s", s);
+		{ // controller log window
+			ImGui::Begin("Controller Log");
+
+			ImGuiListClipper clipper;
+			const int n = arrlen(com.controller_log);
+			clipper.Begin(n);
+			while (clipper.Step()) {
+				for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+					char* entry = com.controller_log[i];
+					ImGui::TextUnformatted(entry);
+				}
+			}
+			clipper.End();
+			ImGui::End();
 		}
 
-		ImGui::End();
+		pthread_rwlock_unlock(&com.rwlock);
 
 		ImGui::Render();
 		glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);

@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 #include "pico/unique_id.h"
+#include "tusb.h"
 
 // local
 #include "config.h"
@@ -15,42 +16,14 @@ unsigned stdin_received_bytes = 0;
 unsigned is_subscribing_to_status = 0;
 struct command_parser command_parser;
 
-void core1_entry() {
-	unsigned prev_status = 0;
-	absolute_time_t last_status_timestamp = 0;
+#if 0
+void core1_entry()
+{
 	for (;;) {
-		{ // poll status pins
-			unsigned status = 0;
-			unsigned mask = 1;
-			#define PIN(TYPE,NAME,GPN) \
-				if (TYPE==STATUS) { \
-					if (gpio_get(GPN)) status |= mask; \
-					mask <<= 1; \
-				}
-			EMIT_PIN_CONFIG
-			#undef PIN
-			if (status != prev_status) {
-				if (is_subscribing_to_status) {
-					absolute_time_t t = get_absolute_time();
-					printf("%s:%llu:%d\n", CTPP_STATUS, t, status);
-					last_status_timestamp = t;
-				}
-				prev_status = status;
-			}
-		}
-
-		{
-			absolute_time_t t = get_absolute_time();
-			if ((t - last_status_timestamp) / (1000000/60)) {
-				printf("%s:%llu\n", CTPP_STATUS_TIME, t);
-				last_status_timestamp = t;
-			}
-		}
-
-		sleep_ms(1); // XXX why is this required?
 		tight_loop_contents();
 	}
 }
+#endif
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
@@ -59,6 +32,40 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	case STATUS:   return GPIO_IN;
 	case CTRL:     return GPIO_OUT;
 	default: PANIC(PANIC_XXX);
+	}
+}
+
+unsigned prev_status = 0;
+absolute_time_t last_status_timestamp = 0;
+
+static void status_housekeeping(void)
+{
+	const absolute_time_t t = get_absolute_time();
+
+	{ // poll status pins
+		unsigned status = 0;
+		unsigned mask = 1;
+		#define PIN(TYPE,NAME,GPN) \
+			if (TYPE==STATUS) { \
+				if (gpio_get(GPN)) status |= mask; \
+				mask <<= 1; \
+			}
+		EMIT_PIN_CONFIG
+		#undef PIN
+		if (status != prev_status) {
+			if (is_subscribing_to_status) {
+				printf("%s %llu %d\n", CPPP_STATUS, t, status);
+				last_status_timestamp = t;
+			}
+			prev_status = status;
+		}
+	}
+
+	if ((t - last_status_timestamp) > (1000000/60)) {
+		if (is_subscribing_to_status) {
+			printf("%s %llu\n", CPPP_STATUS_TIME, t);
+		}
+		last_status_timestamp = t;
 	}
 }
 
@@ -71,16 +78,25 @@ int main()
 	#define PIN(TYPE, NAME, GPN) \
 		gpio_init(GPN); \
 		gpio_set_dir(GPN, gpio_type_to_dir(TYPE)); \
-		if (gpio_type_to_dir(TYPE) == GPIO_OUT) gpio_put(GPN, 0);
+		if (gpio_type_to_dir(TYPE) == GPIO_OUT) { \
+			gpio_put(GPN, 0); \
+		} else { \
+			gpio_pull_down(GPN); \
+		}
 	EMIT_PIN_CONFIG
 	#undef PIN
 
 	stdio_init_all();
+	#if 0
 	multicore_launch_core1(core1_entry);
+	#endif
 
 	blink(50, 0); // "Hi, we're up!"
 
 	for (;;) {
+		tud_task();
+		status_housekeeping();
+
 		int got_char = getchar_timeout_us(0);
 		if (got_char == PICO_ERROR_TIMEOUT || got_char == 0 || got_char >= 256) {
 			tight_loop_contents();
@@ -93,10 +109,10 @@ int main()
 				set_led(command_parser.arguments[0].u);
 			} break;
 			case COMMAND_get_status_descriptors: {
-				printf(CTPP_STATUS_DESCRIPTORS);
+				printf(CPPP_STATUS_DESCRIPTORS);
 				#define PIN(TYPE, NAME, GPN) \
 					if (TYPE == STATUS) { \
-						printf(":%s", #NAME); \
+						printf(" %s", #NAME); \
 					}
 				EMIT_PIN_CONFIG
 				#undef PIN
@@ -104,10 +120,10 @@ int main()
 			} break;
 			case COMMAND_subscribe_to_status: {
 				is_subscribing_to_status = command_parser.arguments[0].b;
-				printf(CTPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
+				printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 			} break;
 			default: {
-				printf(CTPP_ERROR "unhandled command %s/%d\n",
+				printf(CPPP_ERROR "unhandled command %s/%d\n",
 					command_to_string(command_parser.command),
 					command_parser.command);
 			} break;
