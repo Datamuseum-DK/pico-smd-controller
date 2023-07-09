@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "config.h"
+#include "base.h"
 
 const char* HEADER =
 "<!doctype html>\n"
@@ -104,35 +105,36 @@ enum {
 
 #define GP(x)   (GP0+(x))
 
-#define ROWS \
-	ROW(   GP(0)    ,   VBUS     ) \
-	ROW(   GP(1)    ,   VSYS     ) \
-	ROW(   GND      ,   GND      ) \
-	ROW(   GP(2)    ,   P3V3EN   ) \
-	ROW(   GP(3)    ,   P3V3OUT  ) \
-	ROW(   GP(4)    ,   VREF     ) \
-	ROW(   GP(5)    ,   GP(28)   ) \
-	ROW(   GND      ,   GND      ) \
-	ROW(   GP(6)    ,   GP(27)   ) \
-	ROW(   GP(7)    ,   GP(26)   ) \
-	ROW(   GP(8)    ,   RUN      ) \
-	ROW(   GP(9)    ,   GP(22)   ) \
-	ROW(   GND      ,   GND      ) \
-	ROW(   GP(10)   ,   GP(21)   ) \
-	ROW(   GP(11)   ,   GP(20)   ) \
-	ROW(   GP(12)   ,   GP(19)   ) \
-	ROW(   GP(13)   ,   GP(18)   ) \
-	ROW(   GND      ,   GND      ) \
-	ROW(   GP(14)   ,   GP(17)   ) \
-	ROW(   GP(15)   ,   GP(16)   )
-
+#define N_COLUMNS 2
+int pinout[] = {
+	GP(0)    ,   VBUS     ,
+	GP(1)    ,   VSYS     ,
+	GND      ,   GND      ,
+	GP(2)    ,   P3V3EN   ,
+	GP(3)    ,   P3V3OUT  ,
+	GP(4)    ,   VREF     ,
+	GP(5)    ,   GP(28)   ,
+	GND      ,   GND      ,
+	GP(6)    ,   GP(27)   ,
+	GP(7)    ,   GP(26)   ,
+	GP(8)    ,   RUN      ,
+	GP(9)    ,   GP(22)   ,
+	GND      ,   GND      ,
+	GP(10)   ,   GP(21)   ,
+	GP(11)   ,   GP(20)   ,
+	GP(12)   ,   GP(19)   ,
+	GP(13)   ,   GP(18)   ,
+	GND      ,   GND      ,
+	GP(14)   ,   GP(17)   ,
+	GP(15)   ,   GP(16)   ,
+};
 
 static const char* get_label_class(int e)
 {
 	const char* in = "label input";
 	const char* out = "label output";
 	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return TYPE==DATA?in:TYPE==STATUS?in:TYPE==CTRL?out:"";
-	PINS
+	EMIT_PIN_CONFIG
 	#undef PIN
 	return "";
 }
@@ -140,7 +142,7 @@ static const char* get_label_class(int e)
 static const char* get_label_text(int e)
 {
 	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return #NAME;
-	PINS
+	EMIT_PIN_CONFIG
 	#undef PIN
 	return "";
 }
@@ -182,21 +184,19 @@ int main(int argc, char** argv)
 
 	int left_pin = 1;
 	int right_pin = 40;
-
-	#define ROW(L,R)                                                          \
-		printf("<tr>\n");                                                 \
-		printf("<td class=\"%s rj\">%s</td>\n", get_label_class(L), get_label_text(L));         \
-		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(L), get_logic_text(L)); \
-		printf("<td class=\"pin\">%.2d</td>\n", left_pin); \
-		printf("<td class=\"mid\">%s</td>\n", left_pin == 1 ? "&uarr;&uarr;USB&uarr;&uarr;" : ""); \
-		printf("<td class=\"pin\">%.2d</td>\n", right_pin); \
-		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(R), get_logic_text(R));    \
-		printf("<td class=\"%s lj\">%s</td>\n", get_label_class(R), get_label_text(R)); \
-		printf("</tr>\n");                                                \
-		left_pin++; \
-		right_pin--;
-	ROWS
-	#undef ROW
+	for (int index = 0; index < ARRAY_LENGTH(pinout); index += N_COLUMNS, left_pin++, right_pin--) {
+		int left = pinout[index];
+		int right = pinout[index+1];
+		printf("<tr>\n");
+		printf("<td class=\"%s rj\">%s</td>\n", get_label_class(left), get_label_text(left));
+		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(left), get_logic_text(left));
+		printf("<td class=\"pin\">%.2d</td>\n", left_pin);
+		printf("<td class=\"mid\">%s</td>\n", left_pin == 1 ? "&uarr;&uarr;USB&uarr;&uarr;" : "");
+		printf("<td class=\"pin\">%.2d</td>\n", right_pin);
+		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(right), get_logic_text(right));
+		printf("<td class=\"%s lj\">%s</td>\n", get_label_class(right), get_label_text(right));
+		printf("</tr>\n");
+	}
 
 	puts("</table>\n");
 	puts(FOOTER);

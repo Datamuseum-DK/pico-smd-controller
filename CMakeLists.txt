@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
+# add_compile_options(-Wall)
+
 set(PICO_PLATFORM "rp2040")
 
 include(pico-sdk/pico_sdk_init.cmake)
@@ -8,6 +10,8 @@ pico_sdk_init()
 
 add_executable(${PROJECT_NAME}
 	controller.c
+	command_parser.c
+	base.c
 )
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)

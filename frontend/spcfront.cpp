@@ -37,7 +37,7 @@ static void com_recv_char(char ch)
 	if (ch == '\r' || ch == '\n') {
 		if (arrlen(com.recv_line_arr) > 0) {
 			arrput(com.recv_line_arr, 0);
-			printf("got [%s] from tty\n", com.recv_line_arr);
+			printf("line from tty: [%s]\n", com.recv_line_arr);
 			arrsetlen(com.recv_line_arr, 0);
 		}
 	} else {
@@ -86,6 +86,8 @@ void* io_thread_start(void* arg)
 	assert(tty_fd >= 0);
 
 	struct timeval timeout = {0};
+
+	com_enqueue("get_status_descriptors");
 
 	for (;;) {
 		fd_set rfds, wfds;
@@ -180,7 +182,6 @@ int main(int argc, char** argv)
 		}
 	}
 
-	// TODO do handshake before starting thread?
 	pthread_mutex_init(&com.queue_mutex, NULL);
 	pthread_t io_thread;
 	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);

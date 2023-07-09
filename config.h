@@ -1,9 +1,9 @@
 // HINT! See also `print_pin_config_html.c` and `doc/pin_config.html`
 #ifndef CONFIG_H
-                                     // GP0-GP28 (GPIO number, *not* pin number)
-			             // |
-			             // |
-#define PINS \
+//                                      GP0-GP28 (GPIO number, *not* pin number)
+//                                      |
+//                                      |
+#define EMIT_PIN_CONFIG \
 	PIN(DATA,      READ_DATA,       0    ) \
 	PIN(DATA,      READ_CLOCK,      1    ) \
 	PIN(STATUS,    INDEX,           2    ) \
@@ -41,7 +41,7 @@ enum gpio_type { // <- first PIN() column
 
 enum gpio_map {
 	#define PIN(TYPE, NAME, GPIO) GPIO_ ## NAME = GPIO,
-	PINS
+	EMIT_PIN_CONFIG
 	#undef PIN
 };
 

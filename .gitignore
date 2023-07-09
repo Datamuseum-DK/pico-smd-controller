@@ -1,3 +1,10 @@
+# binaries and artifacts
 build/
+unittest_command_parser
+print_pin_config_html
+
+# for your convenience
 tmp/
+
+# vim
 .*swp
