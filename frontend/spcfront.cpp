@@ -24,20 +24,115 @@
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
-int tty_fd = -1;
+#include "controller_protocol.h"
+#define COMMAND(NAME,ARGFMT) const char* CMDSTR_##NAME = #NAME;
+EMIT_COMMANDS
+#undef COMMAND
+
+struct cond {
+	int value;
+	pthread_cond_t pt_cond;
+	pthread_mutex_t pt_mutex;
+};
+
+static void cond_init(struct cond* cond)
+{
+	memset(cond, 0, sizeof *cond);
+	assert(pthread_cond_init(&cond->pt_cond, NULL) == 0);
+	assert(pthread_mutex_init(&cond->pt_mutex, NULL) == 0);
+}
+
+static void cond_wait_nonzero(struct cond* cond)
+{
+	pthread_mutex_lock(&cond->pt_mutex);
+	while (cond->value == 0) pthread_cond_wait(&cond->pt_cond, &cond->pt_mutex);
+	pthread_mutex_unlock(&cond->pt_mutex);
+}
+
+static void cond_signal_value(struct cond* cond, int new_value)
+{
+	pthread_mutex_lock(&cond->pt_mutex);
+	cond->value = new_value;
+	pthread_cond_signal(&cond->pt_cond);
+	pthread_mutex_unlock(&cond->pt_mutex);
+}
+
+static void cond_signal(struct cond* cond)
+{
+	cond_signal_value(cond, 1);
+}
 
 struct com {
+	int fd;
+	char* tty_path;
 	char* recv_line_arr;
 	pthread_mutex_t queue_mutex;
 	char** queue_arr;
+	char** ctrlog;
+	char** status_descriptor_arr;
+	struct cond ready_cond;
 } com;
+
+static int starts_with(char* s, const char* prefix)
+{
+	const int prefix_length = strlen(prefix);
+	if (prefix_length > strlen(s)) return 0;
+	for (int i = 0; i < prefix_length; i++) {
+		if (s[i] != prefix[i]) return 0;
+	}
+	return 1;
+}
+
+static char* duplicate_string(char* s) // strdup() is deprecated?
+{
+	const size_t sz = strlen(s)+1;
+	void* p = malloc(sz);
+	memcpy(p, s, sz);
+	return (char*)p;
+}
+
+static void com__handle_msg(char* msg)
+{
+	if (starts_with(msg, CTPP_LOG)) {
+		printf("(CTRLOG) %s\n", msg);
+		msg = duplicate_string(msg);
+		arrput(com.ctrlog, msg);
+	} else if (starts_with(msg, CTPP_STATUS_DESCRIPTORS)) {
+		assert((com.status_descriptor_arr == NULL) && "seen twice? that's probably not thread-safe...");
+		char* p = msg + strlen(CTPP_STATUS_DESCRIPTORS);
+		for (;;) {
+			char c = *p;
+			if (c == 0) break;
+			assert(c == ':');
+			p++;
+			char* p0 = p;
+			for (;;) {
+				char c2 = *(p++);
+				if (c2 == ':' || c2 == 0) {
+					p--;
+					break;
+				}
+			}
+			if (p > p0) {
+				const size_t n = (p-p0)+1;
+				char* ss = (char*)malloc(n);
+				memcpy(ss, p0, n-1);
+				ss[n-1] = 0;
+				arrput(com.status_descriptor_arr, ss);
+			}
+			cond_signal(&com.ready_cond);
+		}
+	} else {
+		printf("WARNING: garbage message from controller: [%s]\n", msg);
+	}
+}
 
 static void com_recv_char(char ch)
 {
 	if (ch == '\r' || ch == '\n') {
 		if (arrlen(com.recv_line_arr) > 0) {
 			arrput(com.recv_line_arr, 0);
-			printf("line from tty: [%s]\n", com.recv_line_arr);
+			com__handle_msg(com.recv_line_arr);
 			arrsetlen(com.recv_line_arr, 0);
 		}
 	} else {
@@ -83,27 +178,27 @@ static int com_has_pending_writes(void)
 
 void* io_thread_start(void* arg)
 {
-	assert(tty_fd >= 0);
+	assert(com.fd >= 0);
 
 	struct timeval timeout = {0};
 
-	com_enqueue("get_status_descriptors");
+	com_enqueue("%s", CMDSTR_get_status_descriptors);
 
 	for (;;) {
 		fd_set rfds, wfds;
 
 		FD_ZERO(&rfds);
-		FD_SET(tty_fd, &rfds);
+		FD_SET(com.fd, &rfds);
 
 		FD_ZERO(&wfds);
 		if (com_has_pending_writes()) {
-			FD_SET(tty_fd, &wfds);
+			FD_SET(com.fd, &wfds);
 		}
 
 		memset(&timeout, 0, sizeof timeout);
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 1000000/30;
-		int r = select(tty_fd+1, &rfds, &wfds, NULL, &timeout);
+		int r = select(com.fd+1, &rfds, &wfds, NULL, &timeout);
 		if (r == -1) {
 			fprintf(stderr, "select(): %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
@@ -113,9 +208,9 @@ void* io_thread_start(void* arg)
 
 		assert(r > 0);
 
-		if (FD_ISSET(tty_fd, &rfds)) {
+		if (FD_ISSET(com.fd, &rfds)) {
 			char buf[1<<16];
-			int n = read(tty_fd, buf, sizeof buf);
+			int n = read(com.fd, buf, sizeof buf);
 			if (n == -1) {
 				fprintf(stderr, "tty: %s\n", strerror(errno));
 				exit(EXIT_FAILURE);
@@ -123,16 +218,67 @@ void* io_thread_start(void* arg)
 			for (int i = 0; i < n; i++) com_recv_char(buf[i]);
 		}
 
-		if (FD_ISSET(tty_fd, &wfds)) {
+		if (FD_ISSET(com.fd, &wfds)) {
 			char* c = com_shift();
 			assert((c != NULL) && "expected to shift command");
 			size_t n = strlen(c);
-			assert(write(tty_fd, c, n) != -1);
+			assert(write(com.fd, c, n) != -1);
 			free(c);
-			assert(write(tty_fd, "\r\n", 2) != -1);
+			assert(write(com.fd, "\r\n", 2) != -1);
 		}
 	}
 	return NULL;
+}
+
+static void com_startup(char* tty_path)
+{
+	com.tty_path = tty_path;
+	com.fd = open(com.tty_path, O_RDWR | O_NOCTTY);
+	if (com.fd == -1) {
+		fprintf(stderr, "%s: %s\n", com.tty_path, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
+	if (!isatty(com.fd)) {
+		fprintf(stderr, "%s: not a tty\n", com.tty_path);
+		assert(close(com.fd) == 0);
+		exit(EXIT_FAILURE);
+	}
+
+	if (flock(com.fd, LOCK_EX | LOCK_NB) == -1) {
+		if (errno == EWOULDBLOCK) {
+			fprintf(stderr, "%s: already locked by another process\n", com.tty_path);
+		} else {
+			fprintf(stderr, "%s: %s\n", com.tty_path, strerror(errno));
+		}
+		exit(EXIT_FAILURE);
+	}
+
+	{
+		struct termios t;
+		tcgetattr(com.fd, &t);
+		t.c_lflag &= ~(ICANON | ECHO);
+		tcsetattr(com.fd, TCSANOW, &t);
+	}
+
+	cond_init(&com.ready_cond);
+
+	pthread_mutex_init(&com.queue_mutex, NULL);
+	pthread_t io_thread;
+	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);
+
+	printf("COM: waiting for handshake...\n");
+	cond_wait_nonzero(&com.ready_cond);
+	printf("COM: ready!\n");
+}
+
+static void com_shutdown(void)
+{
+	if (flock(com.fd, LOCK_UN) == -1) {
+		fprintf(stderr, "%s: %s\n", com.tty_path, strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	assert(close(com.fd) == 0); // XXX hangs... is it because the other end has to "ACK" the close? maybe?
 }
 
 __attribute__ ((noreturn))
@@ -150,41 +296,7 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	const char* tty_path = argv[1];
-
-	{
-		tty_fd = open(tty_path, O_RDWR | O_NOCTTY);
-		if (tty_fd == -1) {
-			fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-
-		if (!isatty(tty_fd)) {
-			fprintf(stderr, "%s: not a tty\n", tty_path);
-			assert(close(tty_fd) == 0);
-			exit(EXIT_FAILURE);
-		}
-
-		if (flock(tty_fd, LOCK_EX | LOCK_NB) == -1) {
-			if (errno == EWOULDBLOCK) {
-				fprintf(stderr, "%s: already locked by another process\n", tty_path);
-			} else {
-				fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
-			}
-			exit(EXIT_FAILURE);
-		}
-
-		{
-			struct termios t;
-			tcgetattr(tty_fd, &t);
-			t.c_lflag &= ~(ICANON | ECHO);
-			tcsetattr(tty_fd, TCSANOW, &t);
-		}
-	}
-
-	pthread_mutex_init(&com.queue_mutex, NULL);
-	pthread_t io_thread;
-	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);
+	com_startup(argv[1]);
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) SDL2FATAL();
 
@@ -240,6 +352,15 @@ int main(int argc, char** argv)
 			XXXLED = !XXXLED;
 			com_enqueue("led %d", XXXLED);
 		}
+		if (ImGui::Button("STAT")) {
+			com_enqueue("stat");
+		}
+
+		for (int i = 0; i < arrlen(com.status_descriptor_arr); i++) {
+			const char* s = com.status_descriptor_arr[i];
+			ImGui::BulletText("%s", s);
+		}
+
 		ImGui::End();
 
 		ImGui::Render();
@@ -256,11 +377,7 @@ int main(int argc, char** argv)
 	SDL_GL_DeleteContext(glctx);
 	SDL_DestroyWindow(window);
 
-	if (flock(tty_fd, LOCK_UN) == -1) {
-		fprintf(stderr, "%s: %s\n", tty_path, strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-	assert(close(tty_fd) == 0); // XXX hangs... is it because the other end has to "ACK" the close? maybe?
+	com_shutdown();
 
 	return EXIT_SUCCESS;
 }

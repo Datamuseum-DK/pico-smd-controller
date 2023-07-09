@@ -10,7 +10,7 @@
 
 // controller protocol prefixes: response from controller should begin with one
 // of these
-#define CTPP_STATUS_DESCRIPTORS "DS"
+#define CTPP_STATUS_DESCRIPTORS "DS:"
 #define CTPP_LOG "["
 #define CTPP_ERROR CTPP_LOG"ERROR] "
 
