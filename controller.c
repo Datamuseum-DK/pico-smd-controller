@@ -69,6 +69,22 @@ static void status_housekeeping(void)
 	}
 }
 
+static void set_bits(int value)
+{
+	#define PUT(N) gpio_put(GPIO_BIT ## N, value & (1<<N))
+	PUT(0); PUT(1); PUT(2); PUT(3); PUT(4); PUT(5); PUT(5); PUT(6); PUT(7); PUT(8); PUT(9);
+	#undef PUT
+}
+
+enum tag { TAG_CLEAR, TAG_UNIT_SELECT, TAG1, TAG2, TAG3 };
+static void set_tag(enum tag tag)
+{
+	gpio_put(GPIO_UNIT_SELECT_TAG, tag == TAG_UNIT_SELECT);
+	gpio_put(GPIO_TAG1,            tag == TAG1);
+	gpio_put(GPIO_TAG2,            tag == TAG2);
+	gpio_put(GPIO_TAG3,            tag == TAG3);
+}
+
 int main()
 {
 	// I/O pin config
@@ -121,6 +137,21 @@ int main()
 			case COMMAND_subscribe_to_status: {
 				is_subscribing_to_status = command_parser.arguments[0].b;
 				printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
+			} break;
+			case COMMAND_op_cancel: {
+				// TODO
+			} break;
+			case COMMAND_op_unit_select: {
+				// TODO
+			} break;
+			case COMMAND_op_tag1_select_cylinder: {
+				// TODO
+			} break;
+			case COMMAND_op_tag2_select_head: {
+				// TODO
+			} break;
+			case COMMAND_op_tag3_control: {
+				// TODO
 			} break;
 			default: {
 				printf(CPPP_ERROR "unhandled command %s/%d\n",
