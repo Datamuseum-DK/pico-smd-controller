@@ -62,15 +62,22 @@ static void cond_signal(struct cond* cond)
 	cond_signal_value(cond, 1);
 }
 
+struct controller_status {
+	uint64_t timestamp_us;
+	uint32_t status;
+};
+
 struct com {
 	int fd;
 	char* tty_path;
 	char* recv_line_arr;
 	pthread_mutex_t queue_mutex;
 	char** queue_arr;
-	char** ctrlog;
+	char** controller_log;
 	char** status_descriptor_arr;
 	struct cond ready_cond;
+	struct controller_status* controller_status_arr;
+	uint64_t controller_timestamp_us;
 } com;
 
 static int starts_with(char* s, const char* prefix)
@@ -96,7 +103,7 @@ static void com__handle_msg(char* msg)
 	if (starts_with(msg, CTPP_LOG)) {
 		printf("(CTRLOG) %s\n", msg);
 		msg = duplicate_string(msg);
-		arrput(com.ctrlog, msg);
+		arrput(com.controller_log, msg);
 	} else if (starts_with(msg, CTPP_STATUS_DESCRIPTORS)) {
 		assert((com.status_descriptor_arr == NULL) && "seen twice? that's probably not thread-safe...");
 		char* p = msg + strlen(CTPP_STATUS_DESCRIPTORS);
@@ -122,6 +129,12 @@ static void com__handle_msg(char* msg)
 			}
 			cond_signal(&com.ready_cond);
 		}
+	} else if (starts_with(msg, CTPP_STATUS)) {
+		char* p = msg + strlen(CTPP_STATUS);
+		printf("TODO [%s]\n", msg);
+	} else if (starts_with(msg, CTPP_STATUS_TIME)) {
+		char* p = msg + strlen(CTPP_STATUS_TIME);
+		printf("TODO [%s]\n", msg);
 	} else {
 		printf("WARNING: garbage message from controller: [%s]\n", msg);
 	}
@@ -183,6 +196,7 @@ void* io_thread_start(void* arg)
 	struct timeval timeout = {0};
 
 	com_enqueue("%s", CMDSTR_get_status_descriptors);
+	com_enqueue("%s 1", CMDSTR_subscribe_to_status);
 
 	for (;;) {
 		fd_set rfds, wfds;

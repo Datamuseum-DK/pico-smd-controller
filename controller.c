@@ -11,11 +11,43 @@
 #include "command_parser.h"
 #include "low_level_controller.pio.h"
 
-unsigned core1_counter = 0;
+unsigned stdin_received_bytes = 0;
+unsigned is_subscribing_to_status = 0;
+struct command_parser command_parser;
+
 void core1_entry() {
+	unsigned prev_status = 0;
+	absolute_time_t last_status_timestamp = 0;
 	for (;;) {
-		core1_counter++;
-		sleep_ms(1);
+		{ // poll status pins
+			unsigned status = 0;
+			unsigned mask = 1;
+			#define PIN(TYPE,NAME,GPN) \
+				if (TYPE==STATUS) { \
+					if (gpio_get(GPN)) status |= mask; \
+					mask <<= 1; \
+				}
+			EMIT_PIN_CONFIG
+			#undef PIN
+			if (status != prev_status) {
+				if (is_subscribing_to_status) {
+					absolute_time_t t = get_absolute_time();
+					printf("%s:%llu:%d\n", CTPP_STATUS, t, status);
+					last_status_timestamp = t;
+				}
+				prev_status = status;
+			}
+		}
+
+		{
+			absolute_time_t t = get_absolute_time();
+			if ((t - last_status_timestamp) / (1000000/60)) {
+				printf("%s:%llu\n", CTPP_STATUS_TIME, t);
+				last_status_timestamp = t;
+			}
+		}
+
+		sleep_ms(1); // XXX why is this required?
 		tight_loop_contents();
 	}
 }
@@ -29,11 +61,6 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	default: PANIC(PANIC_XXX);
 	}
 }
-
-unsigned stdin_received_bytes = 0;
-unsigned subscription_mask = 0;
-
-struct command_parser command_parser;
 
 int main()
 {
@@ -67,13 +94,17 @@ int main()
 			} break;
 			case COMMAND_get_status_descriptors: {
 				printf(CTPP_STATUS_DESCRIPTORS);
-				#define PIN(TYPE, NAME, GPN) if (TYPE == STATUS) printf(":%s", #NAME);
+				#define PIN(TYPE, NAME, GPN) \
+					if (TYPE == STATUS) { \
+						printf(":%s", #NAME); \
+					}
 				EMIT_PIN_CONFIG
 				#undef PIN
 				printf("\n");
 			} break;
-			case COMMAND_subscribe: {
-				subscription_mask = command_parser.arguments[0].u;
+			case COMMAND_subscribe_to_status: {
+				is_subscribing_to_status = command_parser.arguments[0].b;
+				printf(CTPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 			} break;
 			default: {
 				printf(CTPP_ERROR "unhandled command %s/%d\n",

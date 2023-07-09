@@ -10,6 +10,7 @@ enum command {
 
 #define COMMAND_MAX_ARGS (4)
 union command_argument {
+	unsigned b;
 	unsigned u;
 };
 

@@ -72,6 +72,9 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 			} else {
 				union command_argument* arg = &parser->arguments[arg_index];
 				switch (parser->argfmt[arg_index]) {
+				case 'b':
+					arg->b = atol(parser->token_buffer) != 0;
+					break;
 				case 'u':
 					arg->u = (unsigned)atol(parser->token_buffer);
 					break;
