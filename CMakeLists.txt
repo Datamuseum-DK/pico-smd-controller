@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 
-# add_compile_options(-Wall)
+add_compile_options(-Wall)
 
 set(PICO_PLATFORM "rp2040")
 
