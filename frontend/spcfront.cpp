@@ -443,6 +443,8 @@ int main(int argc, char** argv)
 			const int n_rows = arrlen(com.status_descriptor_arr);
 			const int n_columns = 2;
 			if (ImGui::BeginTable("table", n_columns)) {
+				ImGui::TableSetupColumn("0", ImGuiTableColumnFlags_WidthStretch);
+				ImGui::TableSetupColumn("1", ImGuiTableColumnFlags_WidthFixed);
 				unsigned mask = 1;
 				const struct controller_status* cs = com.controller_status_arr;
 				const int ncs = arrlen(cs);
@@ -453,7 +455,15 @@ int main(int argc, char** argv)
 
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
-					ImGui::Text("TODO");
+
+					{
+						ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+						ImVec2 canvas_sz = ImGui::GetContentRegionAvail();
+						ImVec2 canvas_p1 = ImVec2(canvas_p0.x+(canvas_sz.x), canvas_p0.y+13);
+						ImDrawList* draw_list = ImGui::GetWindowDrawList();
+						draw_list->AddRectFilled(canvas_p0, canvas_p1, st1col);
+					}
+
 					ImGui::TableSetColumnIndex(1);
 					const int on = (ncs > 0) && (cs[ncs-1].status & mask);
 					ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, on ? st1col : st0col);
