@@ -6,20 +6,11 @@
 .define  PUBLIC  DATA 0
 .define  PUBLIC  CLK  1
 
-;  again:
-;      set x, 31           ; shift in a 32-bit word
-;  shiftloop:
-;      wait 0 pin CLK      ; wait for CLK to go low
-;      wait 1 pin CLK      ; wait for CLK to go high
-;      in pins, 1          ; shift DATA into ISR
-;      jmp x-- shiftloop
-;      push                ; push ISR to RX FIFO
-;      jmp again
-
-; this is probably enough assuming implicit looping and "auto push"?
+.wrap_target
     wait 0 pin CLK      ; wait for CLK to go low
     wait 1 pin CLK      ; wait for CLK to go high
-    in pins, 1          ; shift DATA into ISR
+    in pins, 1          ; shift DATA into ISR (assuming "auto pull")
+.wrap
 
 % c-sdk {
 // TODO?
