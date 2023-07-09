@@ -68,7 +68,7 @@ const char* HEADER =
 ".pin {\n"
 "	color: #999;\n"
 "	text-align: center;\n"
-"	background-color: #dfe;\n"
+"	background-color: #ffc;\n"
 "}\n"
 "\n"
 ".GND {\n"
