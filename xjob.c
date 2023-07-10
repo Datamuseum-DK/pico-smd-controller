@@ -170,7 +170,11 @@ static void select_cylinder(unsigned cylinder)
 	pin0_wait(GPIO_ON_CYLINDER, 50000);
 	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
 	// pin_mask_wait()) if the seek does not complete within 500ms
-	pin1_wait(GPIO_ON_CYLINDER, 1000000);
+	const unsigned bits = (1<<GPIO_ON_CYLINDER) | (1<<GPIO_SEEK_END);
+	// NOTE: drive doc says that "Seek End is a combination of ON CYL or
+	// SEEK ERROR" suggesting it's a simple OR-gate of those signals. But
+	// it's a good sanity check nevertheless (cable/drive may be broken).
+	pin_mask_wait(bits, bits, 1000000);
 }
 
 static void tag_select_head(unsigned head)
