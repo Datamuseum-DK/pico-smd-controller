@@ -1,0 +1,30 @@
+.program clocked_read
+
+; Program reads from "READ DATA", clocked by "READ CLOCK", and streams it into
+; memory.
+
+.define  PUBLIC  DATA 0
+.define  PUBLIC  CLK  1
+
+    wait 0 pin CLK      ; wait for CLK to go low
+    wait 1 pin CLK      ; wait for CLK to go high
+    in pins, 1          ; shift 1 bit from DATA into ISR (autopush enabled; overflows into RX FIFO)
+
+% c-sdk {
+
+static inline void clocked_read_program_init(PIO pio, uint sm, uint offset, uint pin0_data)
+{
+	pio_sm_config cfg = clocked_read_program_get_default_config(offset);
+	sm_config_set_in_pins(&cfg, pin0_data);
+	pio_sm_set_consecutive_pindirs(pio, sm, pin0_data, /*pin_count=*/2, /*is_out=*/false);
+	pio_gpio_init(pio, pin0_data);
+	pio_gpio_init(pio, pin0_data + 1); // clk
+
+	sm_config_set_in_shift(&cfg, /*shift_right=*/false, /*autopush=*/true, /*push_threshold=*/32);
+	sm_config_set_fifo_join(&cfg, PIO_FIFO_JOIN_RX);
+
+	pio_sm_init(pio, sm, offset, &cfg);
+	pio_sm_set_enabled(pio, sm, true);
+}
+
+%}

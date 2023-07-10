@@ -10,7 +10,7 @@
 #include "config.h"
 #include "base.h"
 #include "command_parser.h"
-#include "low_level_controller.pio.h"
+#include "clocked_read.pio.h"
 
 unsigned stdin_received_bytes = 0;
 unsigned is_subscribing_to_status = 0;

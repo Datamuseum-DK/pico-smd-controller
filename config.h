@@ -1,8 +1,8 @@
 // HINT! See also `print_pin_config_html.c` and `doc/pin_config.html`
 #ifndef CONFIG_H
 //                                      GP0-GP28 (GPIO number, *not* pin number)
-//                                      |
-//                                      |
+// NOTE: READ_DATA and READ_CLOCK must  |
+// be consequtive; see _Static_assert   |
 #define EMIT_PIN_CONFIG \
 	PIN(DATA,      READ_DATA,       0    ) \
 	PIN(DATA,      READ_CLOCK,      1    ) \
@@ -44,6 +44,10 @@ enum gpio_map {
 	EMIT_PIN_CONFIG
 	#undef PIN
 };
+
+_Static_assert(
+	GPIO_READ_CLOCK == (GPIO_READ_DATA+1),
+	"READ_DATA and READ_CLOCK must have consequtive GPIO pins due to PIO constraints (see PINCTRL discussion in RP2040 datasheet)");
 
 #define CONFIG_H
 #endif

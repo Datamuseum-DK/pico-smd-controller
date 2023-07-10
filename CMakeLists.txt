@@ -24,6 +24,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	hardware_pio
 	pico_unique_id
 )
-pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/low_level_controller.pio)
+pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/clocked_read.pio)
 pico_add_extra_outputs(${PROJECT_NAME})
 target_compile_definitions(${PROJECT_NAME} PRIVATE PICO_ENTER_USB_BOOT_ON_EXIT=1)
