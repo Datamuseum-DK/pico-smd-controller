@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
-#include "pico/multicore.h"
 #include "pico/unique_id.h"
 #include "tusb.h"
 
@@ -10,20 +9,12 @@
 #include "config.h"
 #include "base.h"
 #include "command_parser.h"
-#include "clocked_read.pio.h"
+#include "clocked_read.h"
+#include "xjob.h"
 
 unsigned stdin_received_bytes = 0;
 unsigned is_subscribing_to_status = 0;
 struct command_parser command_parser;
-
-#if 0
-void core1_entry()
-{
-	for (;;) {
-		tight_loop_contents();
-	}
-}
-#endif
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
@@ -35,7 +26,7 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	}
 }
 
-unsigned prev_status = 0;
+unsigned current_status = 0;
 absolute_time_t last_status_timestamp = 0;
 
 static void status_housekeeping(void)
@@ -52,12 +43,12 @@ static void status_housekeeping(void)
 			}
 		EMIT_PIN_CONFIG
 		#undef PIN
-		if (status != prev_status) {
+		if (status != current_status) {
 			if (is_subscribing_to_status) {
 				printf("%s %llu %d\n", CPPP_STATUS, t, status);
 				last_status_timestamp = t;
 			}
-			prev_status = status;
+			current_status = status;
 		}
 	}
 
@@ -69,20 +60,57 @@ static void status_housekeeping(void)
 	}
 }
 
-static void set_bits(int value)
+static void parse(void)
 {
-	#define PUT(N) gpio_put(GPIO_BIT ## N, value & (1<<N))
-	PUT(0); PUT(1); PUT(2); PUT(3); PUT(4); PUT(5); PUT(5); PUT(6); PUT(7); PUT(8); PUT(9);
-	#undef PUT
-}
+	int got_char = getchar_timeout_us(0);
+	if (got_char == PICO_ERROR_TIMEOUT || got_char == 0 || got_char >= 256) {
+		return;
+	}
 
-enum tag { TAG_CLEAR, TAG_UNIT_SELECT, TAG1, TAG2, TAG3 };
-static void set_tag(enum tag tag)
-{
-	gpio_put(GPIO_UNIT_SELECT_TAG, tag == TAG_UNIT_SELECT);
-	gpio_put(GPIO_TAG1,            tag == TAG1);
-	gpio_put(GPIO_TAG2,            tag == TAG2);
-	gpio_put(GPIO_TAG3,            tag == TAG3);
+	stdin_received_bytes++;
+	if (!command_parser_put_char(&command_parser, got_char)) {
+		return;
+	}
+
+	switch (command_parser.command) {
+	case COMMAND_led: {
+		set_led(command_parser.arguments[0].u);
+	} break;
+	case COMMAND_get_status_descriptors: {
+		printf(CPPP_STATUS_DESCRIPTORS);
+		#define PIN(TYPE, NAME, GPN) \
+			if (TYPE == STATUS) { \
+				printf(" %s", #NAME); \
+			}
+		EMIT_PIN_CONFIG
+		#undef PIN
+		printf("\n");
+	} break;
+	case COMMAND_subscribe_to_status: {
+		is_subscribing_to_status = command_parser.arguments[0].b;
+		printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
+	} break;
+	case COMMAND_op_cancel: {
+		xjob_cancel();
+	} break;
+	case COMMAND_op_select_unit0: {
+		xjob_select_unit0();
+	} break;
+	case COMMAND_op_tag1_select_cylinder: {
+		// TODO
+	} break;
+	case COMMAND_op_tag2_select_head: {
+		// TODO
+	} break;
+	case COMMAND_op_tag3_control: {
+		// TODO
+	} break;
+	default: {
+		printf(CPPP_ERROR "unhandled command %s/%d\n",
+			command_to_string(command_parser.command),
+			command_parser.command);
+	} break;
+	}
 }
 
 int main()
@@ -91,75 +119,29 @@ int main()
 	gpio_init(LED_PIN);
 	gpio_set_dir(LED_PIN, GPIO_OUT);
 	gpio_put(LED_PIN, 0);
-	#define PIN(TYPE, NAME, GPN) \
-		gpio_init(GPN); \
-		gpio_set_dir(GPN, gpio_type_to_dir(TYPE)); \
-		if (gpio_type_to_dir(TYPE) == GPIO_OUT) { \
-			gpio_put(GPN, 0); \
-		} else { \
-			gpio_pull_down(GPN); \
+	#define PIN(TYPE, NAME, GPN)                                       \
+		gpio_init(GPN);                                            \
+		gpio_set_dir(GPN, gpio_type_to_dir(TYPE));                 \
+		if (gpio_type_to_dir(TYPE) == GPIO_OUT) {                  \
+			gpio_put(GPN, 0);                                  \
+		} else {                                                   \
+			gpio_pull_down(GPN); /* prevent floating inputs */ \
 		}
 	EMIT_PIN_CONFIG
 	#undef PIN
 
+	clocked_read_init();
+	clocked_read_get_buffer(0); // XXX REMOVE ME temporarily prevents compiler from removing buffer
+
 	stdio_init_all();
-	#if 0
-	multicore_launch_core1(core1_entry);
-	#endif
 
 	blink(50, 0); // "Hi, we're up!"
 
 	for (;;) {
-		tud_task();
+		parse();
 		status_housekeeping();
-
-		int got_char = getchar_timeout_us(0);
-		if (got_char == PICO_ERROR_TIMEOUT || got_char == 0 || got_char >= 256) {
-			tight_loop_contents();
-			continue;
-		}
-		stdin_received_bytes++;
-		if (command_parser_put_char(&command_parser, got_char)) {
-			switch (command_parser.command) {
-			case COMMAND_led: {
-				set_led(command_parser.arguments[0].u);
-			} break;
-			case COMMAND_get_status_descriptors: {
-				printf(CPPP_STATUS_DESCRIPTORS);
-				#define PIN(TYPE, NAME, GPN) \
-					if (TYPE == STATUS) { \
-						printf(" %s", #NAME); \
-					}
-				EMIT_PIN_CONFIG
-				#undef PIN
-				printf("\n");
-			} break;
-			case COMMAND_subscribe_to_status: {
-				is_subscribing_to_status = command_parser.arguments[0].b;
-				printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
-			} break;
-			case COMMAND_op_cancel: {
-				// TODO
-			} break;
-			case COMMAND_op_unit_select: {
-				// TODO
-			} break;
-			case COMMAND_op_tag1_select_cylinder: {
-				// TODO
-			} break;
-			case COMMAND_op_tag2_select_head: {
-				// TODO
-			} break;
-			case COMMAND_op_tag3_control: {
-				// TODO
-			} break;
-			default: {
-				printf(CPPP_ERROR "unhandled command %s/%d\n",
-					command_to_string(command_parser.command),
-					command_parser.command);
-			} break;
-			}
-		}
+		//tight_loop_contents(); // does nothing
+		tud_task();
 	}
 
 	PANIC(PANIC_STOP);

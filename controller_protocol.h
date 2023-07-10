@@ -16,7 +16,7 @@
 	COMMAND(subscribe_to_status,      "b"   ) \
 	COMMAND(led,                      "b"   ) \
 	COMMAND(op_cancel,                ""    ) \
-	COMMAND(op_unit_select,           "u"   ) \
+	COMMAND(op_select_unit0,          ""    ) \
 	COMMAND(op_tag1_select_cylinder,  "u"   ) \
 	COMMAND(op_tag2_select_head,      "u"   ) \
 	COMMAND(op_tag3_control,          "u"   )

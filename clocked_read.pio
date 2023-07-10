@@ -12,6 +12,8 @@
 
 % c-sdk {
 
+#define CLOCKED_READ_WORD_SIZE_IN_BITS_LOG2 (5)
+
 static inline void clocked_read_program_init(PIO pio, uint sm, uint offset, uint pin0_data)
 {
 	pio_sm_config cfg = clocked_read_program_get_default_config(offset);
@@ -19,12 +21,20 @@ static inline void clocked_read_program_init(PIO pio, uint sm, uint offset, uint
 	pio_sm_set_consecutive_pindirs(pio, sm, pin0_data, /*pin_count=*/2, /*is_out=*/false);
 	pio_gpio_init(pio, pin0_data);
 	pio_gpio_init(pio, pin0_data + 1); // clk
-
-	sm_config_set_in_shift(&cfg, /*shift_right=*/false, /*autopush=*/true, /*push_threshold=*/32);
+	//
+	const uint push_threshold = 1 << CLOCKED_READ_WORD_SIZE_IN_BITS_LOG2;
+	sm_config_set_in_shift(&cfg, /*shift_right=*/false, /*autopush=*/true, push_threshold);
 	sm_config_set_fifo_join(&cfg, PIO_FIFO_JOIN_RX);
-
+	//
 	pio_sm_init(pio, sm, offset, &cfg);
-	pio_sm_set_enabled(pio, sm, true);
+}
+//
+static inline uint clocked_read_program_add_and_get_sm(PIO pio, uint pin0_data)
+{
+	const uint offset = pio_add_program(pio, &clocked_read_program);
+	const uint sm = pio_claim_unused_sm(pio, true);
+	clocked_read_program_init(pio, sm, offset, pin0_data);
+	return sm;
 }
 
 %}

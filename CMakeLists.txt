@@ -10,6 +10,8 @@ pico_sdk_init()
 
 add_executable(${PROJECT_NAME}
 	controller.c
+	clocked_read.c
+	xjob.c
 	command_parser.c
 	base.c
 )
@@ -22,6 +24,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 	pico_stdlib
 	pico_multicore
 	hardware_pio
+	hardware_dma
 	pico_unique_id
 )
 pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/clocked_read.pio)
