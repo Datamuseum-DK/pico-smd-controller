@@ -3,7 +3,7 @@
 #include "clocked_read.h"
 #include "clocked_read.pio.h"
 #include "base.h"
-#include "config.h"
+#include "pin_config.h"
 
 #define CLOCKED_READ_PIO         pio0
 #define CLOCKED_READ_DMA_CHANNEL (0)

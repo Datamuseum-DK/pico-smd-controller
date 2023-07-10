@@ -2,12 +2,13 @@
 #include "pico/multicore.h"
 
 #include "base.h"
-#include "config.h"
+#include "pin_config.h"
 #include "xjob.h"
 
 #define ERROR_MASK                \
-	  (1 << GPIO_FAULT)       \
-	| (1 << GPIO_SEEK_ERROR)
+	( (1 << GPIO_FAULT)       \
+	| (1 << GPIO_SEEK_ERROR)  \
+	)
 
 #define TAG_STROBE_SLEEP() sleep_us(2)
 // I haven't seen anything in the docs about how long a "tag pin" should be
@@ -15,14 +16,16 @@
 // operations/pins I'm seeing quotes of 250 ns to 1.0 µs, so 2.0 µs should be
 // abundant?
 
-unsigned job_counter;
-unsigned job_completion_counter;
-unsigned job_error_counter;
+unsigned last_job_id;
+unsigned last_completed_job_id;
+unsigned last_failed_job_id;
+enum xjob_status last_job_status;
 
-static void set_bits(int value)
+static void set_bits(unsigned value)
 {
 	#define PUT(N) gpio_put(GPIO_BIT ## N, value & (1<<N))
-	PUT(0); PUT(1); PUT(2); PUT(3); PUT(4); PUT(5); PUT(5); PUT(6); PUT(7); PUT(8); PUT(9);
+	PUT(0); PUT(1); PUT(2); PUT(3); PUT(4);
+	PUT(5); PUT(6); PUT(7); PUT(8); PUT(9);
 	#undef PUT
 }
 
@@ -39,9 +42,7 @@ static void tag(enum tag tag, unsigned value)
 {
 	set_tag(TAG_CLEAR);
 	switch (tag) {
-	case TAG1:
-	case TAG2:
-	case TAG3:
+	case TAG1: case TAG2: case TAG3:
 		set_bits(value);
 		break;
 	case TAG_UNIT_SELECT:
@@ -54,6 +55,7 @@ static void tag(enum tag tag, unsigned value)
 	set_tag(tag);
 	TAG_STROBE_SLEEP();
 	set_tag(TAG_CLEAR);
+	set_bits(0);
 }
 
 enum { // TABLE 3-1
@@ -69,9 +71,72 @@ enum { // TABLE 3-1
 	TAG3BIT_RELEASE                = 1<<9,
 };
 
+__attribute__ ((noreturn))
+static void HALT(void)
+{
+	while (1) {}
+}
+
+__attribute__ ((noreturn))
+static void OK(void)
+{
+	last_completed_job_id = last_job_id;
+	HALT();
+}
+
+__attribute__ ((noreturn))
+static void ERROR(enum xjob_status error_code)
+{
+	last_failed_job_id = last_job_id;
+	last_job_status = error_code;
+	HALT();
+}
+
+static void check_drive_error(void)
+{
+	if ((gpio_get_all() & ERROR_MASK) != 0) {
+		ERROR(XST_ERR_DRIVE_ERROR);
+	}
+}
+
+static void pin_mask_wait(unsigned mask, unsigned value, unsigned timeout_us)
+{
+	const absolute_time_t t0 = get_absolute_time();
+	while (1) {
+		if ((gpio_get_all() & mask) == value) break;
+		check_drive_error();
+		if ((get_absolute_time() - t0) > timeout_us) {
+			ERROR(XST_ERR_TIMEOUT);
+		}
+		sleep_us(1);
+	}
+}
+
+static void pin_wait(unsigned gpio, unsigned value, unsigned timeout_us)
+{
+	pin_mask_wait((1<<gpio), value ? (1<<gpio) : 0, timeout_us);
+}
+
+static void pin1_wait(unsigned gpio, unsigned timeout_us)
+{
+	pin_wait(gpio, 1, timeout_us);
+}
+
+static void pin0_wait(unsigned gpio, unsigned timeout_us)
+{
+	pin_wait(gpio, 0, timeout_us);
+}
+
+static void control_clear(void)
+{
+	tag(TAG3, 0);
+}
+
 static void rtz_seek(void)
 {
 	tag(TAG3, TAG3BIT_RTZ_SEEK);
+	sleep_us(1000);
+	control_clear();
 }
 
 static void read_enable(void)
@@ -91,57 +156,128 @@ static void read_enable_with_servo_offset(int offset)
 static void select_unit0(void)
 {
 	tag(TAG_UNIT_SELECT, 0);
+	pin1_wait(GPIO_UNIT_SELECTED, 100000);
 }
 
-static void select_cylinder(unsigned cylinder)
+static void tag_select_cylinder(unsigned cylinder)
 {
 	tag(TAG1, cylinder & ((1<<10)-1));
 }
 
-static void select_head(unsigned head)
+static void select_cylinder(unsigned cylinder)
+{
+	tag_select_cylinder(cylinder);
+	pin0_wait(GPIO_ON_CYLINDER, 50000);
+	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
+	// pin_mask_wait()) if the seek does not complete within 500ms
+	pin1_wait(GPIO_ON_CYLINDER, 1000000);
+}
+
+static void tag_select_head(unsigned head)
 {
 	tag(TAG2, head & ((1<<3)-1));
 }
 
-static void STOP(void) { while (1) {}; }
-
-static void DONE(void)
+static void select_head(unsigned head)
 {
-	job_completion_counter++;
-	STOP();
+	tag_select_head(head);
+	// a Christian Rovsing manual ("CR8044M DISK CONTROLLER PRODUCT
+	// SPECIFICATION", section 3.1.1.3) says they have 32/33 sectors per
+	// track, but the last one is a dummy sector and is only "about a
+	// thirteenth of each of the other sectors and is used as a space for
+	// head change.". So sleep for a thirteenth of a sector:
+	sleep_us(((1000000 / (3600/60)) / 32) / 13); // ~40µs
 }
 
-static xjob RUN(void(*fn)(void))
+static inline void reset(void)
 {
-	multicore_reset_core1();
+	multicore_reset_core1(); // waits until core1 is down
+}
+
+static xjob run(void(*fn)(void))
+{
+	unsigned job_id = ++last_job_id;
 	multicore_launch_core1(fn);
-	return job_counter++;
+	return job_id;
 }
 
-static void ERROR(void)
-{
-	job_error_counter++;
-	STOP();
-}
+union {
+	struct {
+		unsigned cylinder;
+	} select_cylinder;
+	struct {
+		unsigned head;
+	} select_head;
+} job_args;
 
+
+////////////////////////////////////
+// select unit 0 ///////////////////
 void job_select_unit0(void)
 {
 	select_unit0();
-	DONE();
+	OK();
+}
+xjob xjob_select_unit0(void)
+{
+	reset();
+	return run(job_select_unit0);
 }
 
+
+/////////////////////////////////////////////////////////////////////////////
+// select cylinder //////////////////////////////////////////////////////////
+void job_select_cylinder(void)
+{
+	select_cylinder(job_args.select_cylinder.cylinder);
+	OK();
+}
+xjob xjob_select_cylinder(unsigned cylinder)
+{
+	reset();
+	job_args.select_cylinder.cylinder = cylinder;
+	return run(job_select_cylinder);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// select head //////////////////////////////////////////////////////////////
+void job_select_head(void)
+{
+	select_head(job_args.select_head.head);
+	OK();
+}
+xjob xjob_select_head(unsigned head)
+{
+	reset();
+	job_args.select_head.head = head;
+	return run(job_select_head);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// rtz / return to track zero ///////////////////////////////////////////////
+void job_rtz(void)
+{
+	rtz_seek();
+	OK();
+}
+xjob xjob_rtz(void)
+{
+	reset();
+	return run(job_rtz);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// cancel ///////////////////////////////////////////////////////////////////
 void job_cancel(void)
 {
 	rtz_seek();
-	DONE();
+	OK();
 }
-
-xjob xjob_select_unit0(void)
-{
-	return RUN(job_select_unit0);
-}
-
 xjob xjob_cancel(void)
 {
-	return RUN(job_cancel);
+	reset();
+	return run(job_cancel);
 }

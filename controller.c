@@ -6,7 +6,7 @@
 #include "tusb.h"
 
 // local
-#include "config.h"
+#include "pin_config.h"
 #include "base.h"
 #include "command_parser.h"
 #include "clocked_read.h"
@@ -96,14 +96,11 @@ static void parse(void)
 	case COMMAND_op_select_unit0: {
 		xjob_select_unit0();
 	} break;
-	case COMMAND_op_tag1_select_cylinder: {
-		// TODO
+	case COMMAND_op_select_cylinder: {
+		xjob_select_cylinder(command_parser.arguments[0].u);
 	} break;
-	case COMMAND_op_tag2_select_head: {
-		// TODO
-	} break;
-	case COMMAND_op_tag3_control: {
-		// TODO
+	case COMMAND_op_select_head: {
+		xjob_select_head(command_parser.arguments[0].u);
 	} break;
 	default: {
 		printf(CPPP_ERROR "unhandled command %s/%d\n",

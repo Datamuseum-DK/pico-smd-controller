@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include "config.h"
+#include "pin_config.h"
 #include "base.h"
 
 const char* HEADER =

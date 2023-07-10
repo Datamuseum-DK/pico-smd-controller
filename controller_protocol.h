@@ -17,9 +17,8 @@
 	COMMAND(led,                      "b"   ) \
 	COMMAND(op_cancel,                ""    ) \
 	COMMAND(op_select_unit0,          ""    ) \
-	COMMAND(op_tag1_select_cylinder,  "u"   ) \
-	COMMAND(op_tag2_select_head,      "u"   ) \
-	COMMAND(op_tag3_control,          "u"   )
+	COMMAND(op_select_cylinder,       "u"   ) \
+	COMMAND(op_select_head,           "u"   )
 
 // controller protocol payload prefixes: response from controller should begin
 // with one of these
