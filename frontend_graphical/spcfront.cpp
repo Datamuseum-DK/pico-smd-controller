@@ -603,6 +603,10 @@ int main(int argc, char** argv)
 				}
 			}
 
+			if (ImGui::CollapsingHeader("Batch")) {
+				ImGui::Text("TODO");
+			}
+
 			if (ImGui::CollapsingHeader("Raw Tag")) {
 				const char* items[] = {
 					// same order as `enum tag`
@@ -670,6 +674,15 @@ int main(int argc, char** argv)
 				if (ImGui::Button("Clear all")) {
 					debug_control_pins = 0;
 					debug_led = 0;
+				}
+			}
+
+			if (ImGui::CollapsingHeader("Misc Debugging")) {
+				if (ImGui::Button("Execute Blink Test Job (Succeed)")) {
+					com_enqueue("op_blink_test 0");
+				}
+				if (ImGui::Button("Execute Blink Test Job (Fail)")) {
+					com_enqueue("op_blink_test 1");
 				}
 			}
 

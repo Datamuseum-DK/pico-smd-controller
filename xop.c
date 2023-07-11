@@ -234,6 +234,9 @@ void terminate_op(void)
 
 union {
 	struct {
+		int fail;
+	} blink_test;
+	struct {
 		unsigned tag;
 		unsigned argument;
 	} raw_tag;
@@ -253,6 +256,30 @@ union {
 		unsigned skip_checks;
 	} read_data;
 } job_args;
+
+////////////////////////////////////
+// blink test //////////////////////
+void job_blink_test(void)
+{
+	for (int i = 0; i < 15; i++) {
+		gpio_put(LED_PIN, 1);
+		sleep_ms(50);
+		gpio_put(LED_PIN, 0);
+		sleep_ms(50);
+	}
+	if (!job_args.blink_test.fail) {
+		DONE();
+	} else {
+		ERROR(XST_ERR_TEST);
+	}
+}
+void xop_blink_test(int fail)
+{
+	reset();
+	job_args.blink_test.fail = fail;
+	run(job_blink_test);
+}
+
 
 ////////////////////////////////////
 // raw tag /////////////////////////

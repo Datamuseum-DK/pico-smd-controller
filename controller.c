@@ -132,6 +132,10 @@ static void parse(void)
 	case COMMAND_terminate_op: {
 		terminate_op();
 	} break;
+	case COMMAND_op_blink_test: {
+		int fail = command_parser.arguments[0].u;
+		xop_blink_test(fail);
+	} break;
 	case COMMAND_op_raw_tag: {
 		const unsigned tag      = command_parser.arguments[0].u;
 		const unsigned argument = command_parser.arguments[1].u;

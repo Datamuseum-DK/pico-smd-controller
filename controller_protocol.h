@@ -17,6 +17,7 @@
 	COMMAND(set_ctrl,                 "u"   ) \
 	COMMAND(led,                      "b"   ) \
 	COMMAND(terminate_op,             ""    ) \
+	COMMAND(op_blink_test,            "u"   ) \
 	COMMAND(op_raw_tag,               "uu"  ) \
 	COMMAND(op_select_unit0,          ""    ) \
 	COMMAND(op_rtz,                   ""    ) \

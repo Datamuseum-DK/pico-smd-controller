@@ -11,11 +11,13 @@ enum xop_status {
 	XST_ERR_DRIVE_ERROR       = 1001,
 	XST_ERR_DRIVE_NOT_READY   = 1002,
 	XST_ERR_TIMEOUT           = 1999,
+	XST_ERR_TEST              = 2001,
 };
 
 enum xop_status poll_xop_status(void);
 void terminate_op(void);
 
+void xop_blink_test(int fail);
 void xop_raw_tag(enum tag tag, unsigned argument);
 void xop_rtz(void);
 void xop_select_unit0(void);
