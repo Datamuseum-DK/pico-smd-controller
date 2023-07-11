@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-wc -l $(git ls-files '*.c' '*.h' '*.cpp' '*.pio' | grep -vF frontend/imgui | grep -vF frontend/imstb_ | grep -vF frontend/imconfig.h | grep -vF stb_ds.h)
+F0=frontend_graphical
+wc -l $(git ls-files '*.c' '*.h' '*.cpp' '*.pio' | grep -vF $F0/imgui | grep -vF $F0/imstb_ | grep -vF $F0/imconfig.h | grep -vF stb_ds.h)

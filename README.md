@@ -16,4 +16,4 @@ https://bitsavers.org/pdf/cdc/discs/smd/83322200M_CDC_BK4XX_BK5XX_Hardware_Refer
 Run `build.sh`. Requirements: `cmake`, `git`, `arm-none-eabi-gcc`.
 
 ### Frontend
-Run `make` in `frontend/` directory. Requirements: SDL2, OpenGL2.
+Run `make` in `frontend_graphical/` directory. Requirements: SDL2, OpenGL2.
