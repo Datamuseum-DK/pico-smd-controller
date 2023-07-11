@@ -174,7 +174,9 @@ static void parse(void)
 		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_enable: {
-		xop_read_enable(command_parser.arguments[0].i);
+		int servo_offset = command_parser.arguments[0].i;
+		int data_strobe_delay = command_parser.arguments[1].i;
+		xop_read_enable(servo_offset, data_strobe_delay);
 		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_data: {
@@ -194,7 +196,9 @@ static void parse(void)
 		const unsigned cylinder1      = command_parser.arguments[1].u;
 		const unsigned head_set       = command_parser.arguments[2].u;
 		const unsigned n_32bit_words  = command_parser.arguments[3].u;
-		xop_read_batch(cylinder0, cylinder1, head_set, n_32bit_words);
+		const int servo_offset        = command_parser.arguments[4].i;
+		const int data_strobe_delay   = command_parser.arguments[5].i;
+		xop_read_batch(cylinder0, cylinder1, head_set, n_32bit_words, servo_offset, data_strobe_delay);
 		is_job_polling = 1;
 	} break;
 	default: {

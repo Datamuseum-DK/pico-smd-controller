@@ -443,13 +443,14 @@ int main(int argc, char** argv)
 	int basic_selected_index = 0;
 	int basic_cylinder = 0;
 	int basic_head = 0;
-	int basic_servo_offset = 0;
 	bool basic_index_sync = true;
 	bool basic_skip_checks = false;
 	int batch_cylinder0 = 0;
 	int batch_cylinder1 = 822;
 	int batch_head_set = 31;
 	int common_32bit_word_count = ((DRIVE_BYTES_PER_TRACK/4)*31)/10;
+	int common_servo_offset = 0;
+	int common_data_strobe_delay = 0;
 
 	const int font_size = 18;
 	ImFont* font = io.Fonts->AddFontFromFileTTF("Cousine-Regular.ttf", font_size);
@@ -575,9 +576,7 @@ int main(int argc, char** argv)
 					if (basic_head >= DRIVE_HEAD_COUNT) basic_head = DRIVE_HEAD_COUNT-1;
 				} break;
 				case 3: {
-					ImGui::InputInt("Servo Offset", &basic_servo_offset);
-					if (basic_servo_offset < -1) basic_servo_offset = -1;
-					if (basic_servo_offset > 1) basic_servo_offset = 1;
+					// nothing
 				} break;
 				case 4: {
 					ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
@@ -601,7 +600,7 @@ int main(int argc, char** argv)
 						com_enqueue("op_select_head %d", basic_head);
 					} break;
 					case 3: {
-						com_enqueue("op_read_enable %d", basic_servo_offset);
+						com_enqueue("op_read_enable %d %d", common_servo_offset, common_data_strobe_delay);
 					} break;
 					case 4: {
 						com_enqueue("op_read_data %d %d %d",
@@ -636,11 +635,13 @@ int main(int argc, char** argv)
 				ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
 				if (common_32bit_word_count < 0) common_32bit_word_count = 0;
 				if (ImGui::Button("Execute!")) {
-					com_enqueue("op_read_batch %d %d %d %d",
+					com_enqueue("op_read_batch %d %d %d %d %d %d",
 						batch_cylinder0,
 						batch_cylinder1,
 						batch_head_set,
-						common_32bit_word_count);
+						common_32bit_word_count,
+						common_servo_offset,
+						common_data_strobe_delay);
 				}
 			}
 
@@ -743,6 +744,21 @@ int main(int argc, char** argv)
 				if (ImGui::Button("Clear Control")) {
 					com_enqueue("op_raw_tag 3 0");
 				}
+			}
+
+			if (ImGui::CollapsingHeader("Common")) {
+				ImGui::TextWrapped("These affect all read operations (except \"Raw Tag\" operations)");
+				ImGui::SeparatorText("Servo Offset");
+				ImGui::InputInt("##servo_offset", &common_servo_offset);
+				ImGui::TextWrapped("\"Offsets the actuator from the nominal on cylinder position toward/away from the spindle.\". +1 is towards, -1 is away");
+				if (common_servo_offset < -1) common_servo_offset = -1;
+				if (common_servo_offset > 1) common_servo_offset = 1;
+
+				ImGui::SeparatorText("Data Strobe Delay");
+				ImGui::InputInt("##data_strobe_delay", &common_data_strobe_delay);
+				ImGui::TextWrapped("\"Enables the PLO data separator to strobe the data at a time earlier/later than optimum.\". -1 is earlier, 1 is later");
+				if (common_data_strobe_delay < -1) common_data_strobe_delay = -1;
+				if (common_data_strobe_delay > 1) common_data_strobe_delay = 1;
 			}
 
 			ImGui::End();

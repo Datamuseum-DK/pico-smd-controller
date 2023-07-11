@@ -8,7 +8,7 @@ enum command {
 	#undef COMMAND
 };
 
-#define COMMAND_MAX_ARGS (4)
+#define COMMAND_MAX_ARGS (10)
 union command_argument {
 	unsigned b;
 	unsigned u;

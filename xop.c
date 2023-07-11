@@ -144,19 +144,20 @@ static void rtz_seek(void)
 	control_clear();
 }
 
-static void read_enable_with_servo_offset(int offset)
+static void read_enable_ex(int servo_offset, int data_strobe_delay)
 {
 	check_drive_error();
 	const unsigned bits = TAG3BIT_READ_GATE
-		| (offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
-		:  offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
-		: 0);
-	tag_raw(TAG3, bits);
-}
 
-static void read_enable()
-{
-	read_enable_with_servo_offset(0);
+		| (servo_offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
+		:  servo_offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
+		: 0)
+
+		| (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
+		:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
+		: 0);
+
+	tag_raw(TAG3, bits);
 }
 
 static void tag_select_cylinder(unsigned cylinder)
@@ -257,6 +258,7 @@ union {
 	} select_head;
 	struct {
 		int servo_offset;
+		int data_strobe_delay;
 	} read_enable;
 	struct {
 		unsigned buffer_index;
@@ -269,6 +271,8 @@ union {
 		unsigned cylinder0;
 		unsigned cylinder1;
 		unsigned head_set;
+		int servo_offset;
+		int data_strobe_delay;
 	} batch_read;
 
 } job_args;
@@ -378,13 +382,16 @@ void xop_select_head(unsigned head)
 void job_read_enable(void)
 {
 	select_unit0_if_not_selected();
-	read_enable_with_servo_offset(job_args.read_enable.servo_offset);
+	read_enable_ex(
+		job_args.read_enable.servo_offset,
+		job_args.read_enable.data_strobe_delay);
 	DONE();
 }
-void xop_read_enable(int servo_offset)
+void xop_read_enable(int servo_offset, int data_strobe_delay)
 {
 	reset();
 	job_args.read_enable.servo_offset = servo_offset;
+	job_args.read_enable.data_strobe_delay = data_strobe_delay;
 	run(job_read_enable);
 }
 
@@ -423,6 +430,9 @@ void job_batch_read(void)
 	const unsigned cylinder1 = job_args.batch_read.cylinder1;
 	const unsigned head_set = job_args.batch_read.head_set;
 	const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
+	const int servo_offset = job_args.batch_read.servo_offset;
+	const int data_strobe_delay = job_args.batch_read.data_strobe_delay;
+
 	for (unsigned cylinder = cylinder0; cylinder <= cylinder1; cylinder++) {
 		select_cylinder(cylinder);
 		// The CDC docs lists "read while off cylinder" as one of the
@@ -433,7 +443,7 @@ void job_batch_read(void)
 		//   "This fault is generated if the drive is in an Off
 		//   Cylinder condition and it receives a Read or Write gate
 		//   from the controller."
-		read_enable();
+		read_enable_ex(servo_offset, data_strobe_delay);
 		unsigned mask = 1;
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
 			if ((head_set & mask) == 0) continue;
@@ -456,12 +466,14 @@ void job_batch_read(void)
 	}
 	DONE();
 }
-void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, unsigned n_32bit_words_per_track)
+void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, unsigned n_32bit_words_per_track, int servo_offset, int data_strobe_delay)
 {
 	reset();
 	job_args.batch_read.n_32bit_words_per_track = n_32bit_words_per_track;
 	job_args.batch_read.cylinder0 = cylinder0;
 	job_args.batch_read.cylinder1 = cylinder1;
 	job_args.batch_read.head_set = head_set;
+	job_args.batch_read.servo_offset = servo_offset;
+	job_args.batch_read.data_strobe_delay = data_strobe_delay;
 	run(job_batch_read);
 }
