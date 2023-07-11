@@ -1,3 +1,11 @@
+// DESIGN NOTE: The "drive operations code" in here is executed on core1. It's
+// slightly wasteful because operations busy wait most of the time. One
+// reedeming quality with this design is that core0 operations can't delay
+// drive operations, but frankly I chose this design because it's easier to
+// write than various ways of doing async code in C. Also, I really don't have
+// anything else to use core1 for? (all the high bandwidth heavy lifting is
+// entirely handled by PIO/DMA)
+
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 

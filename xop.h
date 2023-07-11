@@ -1,6 +1,4 @@
-#ifndef XJOB_H
-
-// core1 (second CPU core) on RP2040 is reserved for executing "jobs".
+#ifndef XOP_H // "eXecute drive OPerations".
 
 #include "controller_protocol.h"
 
@@ -27,5 +25,5 @@ void xop_read_enable(int servo_offset, int data_strobe_delay);
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned raw);
 void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, unsigned n_32bit_words_per_track, int servo_offset, int data_strobe_delay);
 
-#define XJOB_H
+#define XOP_H
 #endif
