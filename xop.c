@@ -419,13 +419,21 @@ void job_batch_read(void)
 {
 	select_unit0_if_not_selected();
 	check_drive_error();
-	read_enable();
 	const unsigned cylinder0 = job_args.batch_read.cylinder0;
 	const unsigned cylinder1 = job_args.batch_read.cylinder1;
 	const unsigned head_set = job_args.batch_read.head_set;
 	const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
 	for (unsigned cylinder = cylinder0; cylinder <= cylinder1; cylinder++) {
 		select_cylinder(cylinder);
+		// The CDC docs lists "read while off cylinder" as one of the
+		// conditions that can trigger a FAULT. Although the following
+		// section suggests the fault is only generated if requested
+		// while seeking?:
+		//   "(Read or Write) and Off Cylinder Fault"
+		//   "This fault is generated if the drive is in an Off
+		//   Cylinder condition and it receives a Read or Write gate
+		//   from the controller."
+		read_enable();
 		unsigned mask = 1;
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
 			if ((head_set & mask) == 0) continue;
@@ -444,6 +452,7 @@ void job_batch_read(void)
 				/*index_sync=*/1,
 				/*skip_checks=*/0);
 		}
+		control_clear();
 	}
 	DONE();
 }
