@@ -13,9 +13,12 @@
 #include "controller_protocol.h"
 #include "xop.h"
 
-unsigned stdin_received_bytes = 0;
-unsigned is_subscribing_to_status = 0;
+unsigned stdin_received_bytes;
+unsigned is_subscribing_to_status;
 struct command_parser command_parser;
+unsigned current_status;
+absolute_time_t last_status_timestamp;
+int is_job_polling;
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
@@ -26,9 +29,6 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	default: PANIC(PANIC_XXX);
 	}
 }
-
-unsigned current_status = 0;
-absolute_time_t last_status_timestamp = 0;
 
 static void status_housekeeping(void)
 {
@@ -70,6 +70,19 @@ static void handle_frontend_data_transfers(void)
 	unsigned buffer_size = get_buffer_size(written_buffer_index);
 	printf(CPPP_DEBUG "TODO transfer buffer %d / sz=%d\n", written_buffer_index, buffer_size);
 	release_buffer(written_buffer_index);
+}
+
+static void handle_job_status(void)
+{
+	if (!is_job_polling) return;
+	enum xop_status st = poll_xop_status();
+	if (st == XST_DONE) {
+		printf(CPPP_INFO "Job OK!\n");
+		is_job_polling = 0;
+	} else if (st >= XST_ERR0) {
+		printf(CPPP_INFO "Job FAILED! (error:%d)\n", st);
+		is_job_polling = 0;
+	}
 }
 
 static void parse(void)
@@ -135,26 +148,33 @@ static void parse(void)
 	case COMMAND_op_blink_test: {
 		int fail = command_parser.arguments[0].u;
 		xop_blink_test(fail);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_raw_tag: {
 		const unsigned tag      = command_parser.arguments[0].u;
 		const unsigned argument = command_parser.arguments[1].u;
 		xop_raw_tag(tag, argument);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_rtz: {
 		xop_rtz();
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_unit0: {
 		xop_select_unit0();
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_cylinder: {
 		xop_select_cylinder(command_parser.arguments[0].u);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_head: {
 		xop_select_head(command_parser.arguments[0].u);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_enable: {
 		xop_read_enable(command_parser.arguments[0].i);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_data: {
 		if (!can_allocate_buffer()) {
@@ -164,6 +184,7 @@ static void parse(void)
 				command_parser.arguments[0].u,
 				command_parser.arguments[1].u,
 				command_parser.arguments[2].u);
+			is_job_polling = 1;
 			printf(CPPP_DEBUG "reading into buffer %d\n", buffer_index);
 		}
 	} break;
@@ -202,6 +223,7 @@ int main()
 		parse();
 		status_housekeeping();
 		handle_frontend_data_transfers();
+		handle_job_status();
 		//tight_loop_contents(); // does nothing
 		tud_task();
 	}

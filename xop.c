@@ -24,7 +24,7 @@
 // operations/pins I'm seeing quotes of 250 ns to 1.0 µs, so 2.0 µs should be
 // abundant?
 
-enum xop_status status;
+volatile enum xop_status status;
 
 static void set_bits(unsigned value)
 {
@@ -224,7 +224,13 @@ static inline void reset(void)
 
 static void run(void(*fn)(void))
 {
+	status = XST_RUNNING;
 	multicore_launch_core1(fn);
+}
+
+enum xop_status poll_xop_status(void)
+{
+	return status;
 }
 
 void terminate_op(void)

@@ -34,6 +34,7 @@
 #define CPPP_LOG "["
 #define CPPP_ERROR   CPPP_LOG"ERROR] "
 #define CPPP_WARNING CPPP_LOG"WARNING] "
+#define CPPP_INFO    CPPP_LOG"INFO] "
 #define CPPP_DEBUG   CPPP_LOG"DEBUG] "
 
 #define EMIT_CONTROLS                     \
