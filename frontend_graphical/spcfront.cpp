@@ -542,6 +542,9 @@ int main(int argc, char** argv)
 				}
 			}
 			clipper.End();
+			if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+				ImGui::SetScrollHereY(1.0f);
+			}
 			ImGui::End();
 		}
 
