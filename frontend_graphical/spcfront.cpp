@@ -448,6 +448,10 @@ int main(int argc, char** argv)
 	bool basic_index_sync = true;
 	bool basic_skip_checks = false;
 
+	const int font_size = 18;
+	ImFont* font = io.Fonts->AddFontFromFileTTF("Cousine-Regular.ttf", font_size);
+	io.Fonts->Build();
+
 	int exiting = 0;
 	while (!exiting) {
 		SDL_Event ev;
@@ -503,7 +507,7 @@ int main(int argc, char** argv)
 							if (st->status & mask) {
 								draw_list->AddRectFilled(
 									ImVec2(x_left, area_p0.y),
-									ImVec2(x_right, area_p0.y+13),
+									ImVec2(x_right, area_p0.y+font_size),
 									st1col);
 							}
 							x_right = x_left;
