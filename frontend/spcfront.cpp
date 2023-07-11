@@ -415,7 +415,9 @@ int main(int argc, char** argv)
 
 	float status_scope_scale = 7.5;
 
-	int XXXLED = 0;
+	bool previous_debug_led = false,     debug_led = false;
+	int previous_debug_control_pins = 0, debug_control_pins = 0;
+
 	int exiting = 0;
 	while (!exiting) {
 		SDL_Event ev;
@@ -508,11 +510,52 @@ int main(int argc, char** argv)
 
 		{ // controller control
 			ImGui::Begin("Controller Control");
-			if (ImGui::Button("Toggle LED")) {
-				XXXLED = !XXXLED;
-				com_enqueue("led %d", XXXLED);
+
+			if (ImGui::CollapsingHeader("A")) {
 			}
+
+			if (ImGui::CollapsingHeader("Control pin debugging")) {
+				{
+					int mask = 1;
+					#define CONTROL(NAME,SUPPORTED) \
+						if (SUPPORTED) { \
+							ImGui::CheckboxFlags(#NAME, &debug_control_pins, mask); \
+						} \
+						mask <<= 1;
+					EMIT_CONTROLS
+					#undef CONTROL
+				}
+				ImGui::Checkbox("*LED", &debug_led);
+				if (ImGui::Button("Set all")) {
+					int mask = 1;
+					#define CONTROL(NAME,SUPPORTED) \
+						if (SUPPORTED) debug_control_pins |= mask; \
+						mask <<= 1;
+					EMIT_CONTROLS
+					#undef CONTROL
+				}
+				if (ImGui::Button("Clear all")) {
+					debug_control_pins = 0;
+				}
+			}
+
+			if (ImGui::CollapsingHeader("Misc")) {
+				if (ImGui::Button("Toggle LED")) {
+					debug_led = !debug_led;
+				}
+			}
+
 			ImGui::End();
+		}
+
+		if (debug_control_pins != previous_debug_control_pins) {
+			com_enqueue("set_ctrl %d", debug_control_pins);
+			previous_debug_control_pins = debug_control_pins;
+		}
+
+		if (debug_led != previous_debug_led) {
+			com_enqueue("led %d", debug_led?1:0);
+			previous_debug_led = debug_led;
 		}
 
 		pthread_rwlock_unlock(&com.rwlock);

@@ -12,6 +12,7 @@ enum command {
 union command_argument {
 	unsigned b;
 	unsigned u;
+	int      i;
 };
 
 struct command_parser {

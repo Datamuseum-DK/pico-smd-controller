@@ -8,6 +8,8 @@
 #define PANIC_UNREACHABLE               (0xA3)
 #define PANIC_UNHANDLED_COMMAND         (0xAC)
 #define PANIC_BOUNDS_CHECK_FAILED       (0x123)
+#define PANIC_UNEXPECTED_STATE          (0x33)
+#define PANIC_ALLOCATION_ERROR          (0x22)
 
 #define ARRAY_LENGTH(xs) (sizeof(xs) / sizeof(xs[0]))
 #define ARRAY_END(xs) ((xs) + ARRAY_LENGTH(xs))

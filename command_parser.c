@@ -78,6 +78,9 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 				case 'u':
 					arg->u = (unsigned)atol(parser->token_buffer);
 					break;
+				case 'i':
+					arg->i = atoi(parser->token_buffer);
+					break;
 				default: PANIC(PANIC_UNREACHABLE);
 				}
 			}
@@ -148,6 +151,8 @@ int main(int argc, char** argv)
 	try_parse("get_status_descriptors\n", COMMAND_get_status_descriptors);
 	try_parse("subscribe_to_status 424242\n", COMMAND_subscribe_to_status);
 	assert(command_parser.arguments[0].b);
+	try_parse("op_read_enable -42\n", COMMAND_op_read_enable);
+	assert(command_parser.arguments[0].i == -42);
 	printf("OK\n");
 }
 

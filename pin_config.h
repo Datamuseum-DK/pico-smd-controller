@@ -15,20 +15,20 @@
 	PIN(STATUS,    ADDRESS_MARK,    8    ) \
 	PIN(STATUS,    UNIT_SELECTED,   9    ) \
 	PIN(STATUS,    SEEK_END,        10   ) \
-	PIN(CTRL,      UNIT_SELECT_TAG, 14   ) \
-	PIN(CTRL,      TAG1,            11   ) \
-	PIN(CTRL,      TAG2,            12   ) \
-	PIN(CTRL,      TAG3,            13   ) \
-	PIN(CTRL,      BIT0,            16   ) \
-	PIN(CTRL,      BIT1,            17   ) \
-	PIN(CTRL,      BIT2,            18   ) \
-	PIN(CTRL,      BIT3,            19   ) \
-	PIN(CTRL,      BIT4,            20   ) \
-	PIN(CTRL,      BIT5,            21   ) \
-	PIN(CTRL,      BIT6,            22   ) \
-	PIN(CTRL,      BIT7,            26   ) \
-	PIN(CTRL,      BIT8,            27   ) \
-	PIN(CTRL,      BIT9,            28   ) \
+	PIN(CONTROL,   UNIT_SELECT_TAG, 14   ) \
+	PIN(CONTROL,   TAG1,            11   ) \
+	PIN(CONTROL,   TAG2,            12   ) \
+	PIN(CONTROL,   TAG3,            13   ) \
+	PIN(CONTROL,   BIT0,            16   ) \
+	PIN(CONTROL,   BIT1,            17   ) \
+	PIN(CONTROL,   BIT2,            18   ) \
+	PIN(CONTROL,   BIT3,            19   ) \
+	PIN(CONTROL,   BIT4,            20   ) \
+	PIN(CONTROL,   BIT5,            21   ) \
+	PIN(CONTROL,   BIT6,            22   ) \
+	PIN(CONTROL,   BIT7,            26   ) \
+	PIN(CONTROL,   BIT8,            27   ) \
+	PIN(CONTROL,   BIT9,            28   ) \
 
 // Naming matches figure 3-11 in this document:
 // https://bitsavers.org/pdf/cdc/discs/smd/83322200M_CDC_BK4XX_BK5XX_Hardware_Reference_Manual_Jun1980.pdf
@@ -36,7 +36,7 @@
 enum gpio_type { // <- first PIN() column
 	DATA     = 1, // input: 9.67MHz data rate
 	STATUS,       // input: low bitrate
-	CTRL          // output: low bitrate
+	CONTROL,      // output: low bitrate
 };
 
 enum gpio_map {

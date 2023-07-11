@@ -11,7 +11,7 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME}
 	controller.c
 	clocked_read.c
-	xjob.c
+	xop.c
 	command_parser.c
 	base.c
 )

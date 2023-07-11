@@ -3,11 +3,19 @@
 
 #include "base.h"
 #include "pin_config.h"
-#include "xjob.h"
+#include "drive.h"
+#include "controller_protocol.h"
+#include "xop.h"
+#include "clocked_read.h"
 
 #define ERROR_MASK                \
 	( (1 << GPIO_FAULT)       \
 	| (1 << GPIO_SEEK_ERROR)  \
+	)
+
+#define READY_MASK                   \
+	( (1 << GPIO_UNIT_READY)     \
+	| (1 << GPIO_UNIT_SELECTED)  \
 	)
 
 #define TAG_STROBE_SLEEP() sleep_us(2)
@@ -16,10 +24,7 @@
 // operations/pins I'm seeing quotes of 250 ns to 1.0 µs, so 2.0 µs should be
 // abundant?
 
-unsigned last_job_id;
-unsigned last_completed_job_id;
-unsigned last_failed_job_id;
-enum xjob_status last_job_status;
+enum xop_status status;
 
 static void set_bits(unsigned value)
 {
@@ -29,7 +34,6 @@ static void set_bits(unsigned value)
 	#undef PUT
 }
 
-enum tag { TAG_CLEAR, TAG_UNIT_SELECT, TAG1, TAG2, TAG3 };
 static inline void set_tag(enum tag tag)
 {
 	gpio_put(GPIO_UNIT_SELECT_TAG, tag == TAG_UNIT_SELECT);
@@ -38,7 +42,7 @@ static inline void set_tag(enum tag tag)
 	gpio_put(GPIO_TAG3,            tag == TAG3);
 }
 
-static void tag(enum tag tag, unsigned value)
+static void tag_raw(enum tag tag, unsigned value)
 {
 	set_tag(TAG_CLEAR);
 	switch (tag) {
@@ -58,19 +62,6 @@ static void tag(enum tag tag, unsigned value)
 	set_bits(0);
 }
 
-enum { // TABLE 3-1
-	TAG3BIT_WRITE_GATE             = 1<<0,
-	TAG3BIT_READ_GATE              = 1<<1,
-	TAG3BIT_SERVO_OFFSET_POSITIVE  = 1<<2, // nudge ~250µin off servo track; towards spindle
-	TAG3BIT_SERVO_OFFSET_NEGATIVE  = 1<<3, // nudge ~250µin off servo track; away from spindle
-	TAG3BIT_FAULT_CLEAR            = 1<<4, // "100 ns (minimum)"
-	TAG3BIT_ADDRESS_MARK_ENABLE    = 1<<5,
-	TAG3BIT_RTZ_SEEK               = 1<<6, // Return to Track Zero? "250 ns to 1.0 µs wide"
-	TAG3BIT_DATA_STROBE_EARLY      = 1<<7,
-	TAG3BIT_DATA_STROBE_LATE       = 1<<8,
-	TAG3BIT_RELEASE                = 1<<9,
-};
-
 __attribute__ ((noreturn))
 static void HALT(void)
 {
@@ -78,33 +69,32 @@ static void HALT(void)
 }
 
 __attribute__ ((noreturn))
-static void OK(void)
+static void DONE(void)
 {
-	last_completed_job_id = last_job_id;
+	status = XST_DONE;
 	HALT();
 }
 
 __attribute__ ((noreturn))
-static void ERROR(enum xjob_status error_code)
+static void ERROR(enum xop_status error_code)
 {
-	last_failed_job_id = last_job_id;
-	last_job_status = error_code;
+	status = error_code;
 	HALT();
 }
 
 static void check_drive_error(void)
 {
-	if ((gpio_get_all() & ERROR_MASK) != 0) {
-		ERROR(XST_ERR_DRIVE_ERROR);
-	}
+	unsigned pins = gpio_get_all();
+	if ((pins & ERROR_MASK) != 0)          ERROR(XST_ERR_DRIVE_ERROR);
+	if ((pins & READY_MASK) != READY_MASK) ERROR(XST_ERR_DRIVE_NOT_READY);
 }
 
 static void pin_mask_wait(unsigned mask, unsigned value, unsigned timeout_us)
 {
 	const absolute_time_t t0 = get_absolute_time();
 	while (1) {
-		if ((gpio_get_all() & mask) == value) break;
 		check_drive_error();
+		if ((gpio_get_all() & mask) == value) break;
 		if ((get_absolute_time() - t0) > timeout_us) {
 			ERROR(XST_ERR_TIMEOUT);
 		}
@@ -129,43 +119,52 @@ static void pin0_wait(unsigned gpio, unsigned timeout_us)
 
 static void control_clear(void)
 {
-	tag(TAG3, 0);
-}
-
-static void rtz_seek(void)
-{
-	tag(TAG3, TAG3BIT_RTZ_SEEK);
-	sleep_us(1000);
-	control_clear();
-}
-
-static void read_enable(void)
-{
-	tag(TAG3, TAG3BIT_READ_GATE);
-}
-
-static void read_enable_with_servo_offset(int offset)
-{
-	const unsigned bits = TAG3BIT_READ_GATE
-		| (offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
-		:  offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
-		: 0);
-	tag(TAG3, bits);
+	tag_raw(TAG3, 0);
 }
 
 static void select_unit0(void)
 {
-	tag(TAG_UNIT_SELECT, 0);
+	tag_raw(TAG_UNIT_SELECT, 0);
 	pin1_wait(GPIO_UNIT_SELECTED, 100000);
+	check_drive_error();
+}
+
+static void begin_drive_job(void)
+{
+	if (!gpio_get(GPIO_UNIT_SELECTED)) {
+		select_unit0();
+	} else {
+		check_drive_error();
+	}
+}
+
+static void rtz_seek(void)
+{
+	begin_drive_job();
+	tag_raw(TAG3, TAG3BIT_RTZ_SEEK);
+	sleep_us(1000);
+	control_clear();
+}
+
+static void read_enable_with_servo_offset(int offset)
+{
+	begin_drive_job();
+	const unsigned bits = TAG3BIT_READ_GATE
+		| (offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
+		:  offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
+		: 0);
+	tag_raw(TAG3, bits);
 }
 
 static void tag_select_cylinder(unsigned cylinder)
 {
-	tag(TAG1, cylinder & ((1<<10)-1));
+	begin_drive_job();
+	tag_raw(TAG1, cylinder & ((1<<10)-1));
 }
 
 static void select_cylinder(unsigned cylinder)
 {
+	begin_drive_job();
 	tag_select_cylinder(cylinder);
 	pin0_wait(GPIO_ON_CYLINDER, 50000);
 	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
@@ -179,40 +178,96 @@ static void select_cylinder(unsigned cylinder)
 
 static void tag_select_head(unsigned head)
 {
-	tag(TAG2, head & ((1<<3)-1));
+	begin_drive_job();
+	tag_raw(TAG2, head & ((1<<3)-1));
 }
 
 static void select_head(unsigned head)
 {
+	begin_drive_job();
 	tag_select_head(head);
 	// a Christian Rovsing manual ("CR8044M DISK CONTROLLER PRODUCT
 	// SPECIFICATION", section 3.1.1.3) says they have 32/33 sectors per
 	// track, but the last one is a dummy sector and is only "about a
 	// thirteenth of each of the other sectors and is used as a space for
 	// head change.". So sleep for a thirteenth of a sector:
-	sleep_us(((1000000 / (3600/60)) / 32) / 13); // ~40µs
+	sleep_us(((1000000 / DRIVE_RPS) / 32) / 13); // ~40µs
 }
+
+static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
+{
+	if (!skip_checks) begin_drive_job();
+	if (index_sync) {
+		pin0_wait(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10);
+		pin1_wait(GPIO_INDEX, (1000000 / (DRIVE_RPS/3))); // wait at most 3 revolutions
+	}
+	clocked_read_into_buffer(buffer_index, n_32bit_words);
+	while (1) {
+		if (!clocked_read_is_running()) break;
+		check_drive_error();
+		sleep_us(1);
+	}
+	wrote_buffer(buffer_index);
+}
+
+#if 0
+static void read_data_normal(unsigned buffer_index, unsigned n_32bit_words)
+{
+	read_data(buffer_index, n_32bit_words, /*index_sync=*/1, /*skip_checks=*/0);
+}
+#endif
 
 static inline void reset(void)
 {
 	multicore_reset_core1(); // waits until core1 is down
 }
 
-static xjob run(void(*fn)(void))
+static void run(void(*fn)(void))
 {
-	unsigned job_id = ++last_job_id;
 	multicore_launch_core1(fn);
-	return job_id;
+}
+
+void terminate_op(void)
+{
+	reset();
 }
 
 union {
+	struct {
+		unsigned tag;
+		unsigned argument;
+	} raw_tag;
 	struct {
 		unsigned cylinder;
 	} select_cylinder;
 	struct {
 		unsigned head;
 	} select_head;
+	struct {
+		int servo_offset;
+	} read_enable;
+	struct {
+		unsigned buffer_index;
+		unsigned n_32bit_words;
+		unsigned index_sync;
+		unsigned skip_checks;
+	} read_data;
 } job_args;
+
+////////////////////////////////////
+// raw tag /////////////////////////
+void job_raw_tag(void)
+{
+	tag_raw(job_args.raw_tag.tag, job_args.raw_tag.argument);
+	DONE();
+}
+void xop_raw_tag(enum tag tag, unsigned argument)
+{
+	reset();
+	job_args.raw_tag.tag = tag;
+	job_args.raw_tag.argument = argument;
+	run(job_raw_tag);
+}
 
 
 ////////////////////////////////////
@@ -220,42 +275,12 @@ union {
 void job_select_unit0(void)
 {
 	select_unit0();
-	OK();
+	DONE();
 }
-xjob xjob_select_unit0(void)
+void xop_select_unit0(void)
 {
 	reset();
-	return run(job_select_unit0);
-}
-
-
-/////////////////////////////////////////////////////////////////////////////
-// select cylinder //////////////////////////////////////////////////////////
-void job_select_cylinder(void)
-{
-	select_cylinder(job_args.select_cylinder.cylinder);
-	OK();
-}
-xjob xjob_select_cylinder(unsigned cylinder)
-{
-	reset();
-	job_args.select_cylinder.cylinder = cylinder;
-	return run(job_select_cylinder);
-}
-
-
-/////////////////////////////////////////////////////////////////////////////
-// select head //////////////////////////////////////////////////////////////
-void job_select_head(void)
-{
-	select_head(job_args.select_head.head);
-	OK();
-}
-xjob xjob_select_head(unsigned head)
-{
-	reset();
-	job_args.select_head.head = head;
-	return run(job_select_head);
+	run(job_select_unit0);
 }
 
 
@@ -264,24 +289,77 @@ xjob xjob_select_head(unsigned head)
 void job_rtz(void)
 {
 	rtz_seek();
-	OK();
+	DONE();
 }
-xjob xjob_rtz(void)
+void xop_rtz(void)
 {
 	reset();
-	return run(job_rtz);
+	run(job_rtz);
 }
 
 
 /////////////////////////////////////////////////////////////////////////////
-// cancel ///////////////////////////////////////////////////////////////////
-void job_cancel(void)
+// select cylinder //////////////////////////////////////////////////////////
+void job_select_cylinder(void)
 {
-	rtz_seek();
-	OK();
+	select_cylinder(job_args.select_cylinder.cylinder);
+	DONE();
 }
-xjob xjob_cancel(void)
+void xop_select_cylinder(unsigned cylinder)
 {
 	reset();
-	return run(job_cancel);
+	job_args.select_cylinder.cylinder = cylinder;
+	run(job_select_cylinder);
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// select head //////////////////////////////////////////////////////////////
+void job_select_head(void)
+{
+	select_head(job_args.select_head.head);
+	DONE();
+}
+void xop_select_head(unsigned head)
+{
+	reset();
+	job_args.select_head.head = head;
+	run(job_select_head);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// read enable //////////////////////////////////////////////////////////////
+void job_read_enable(void)
+{
+	read_enable_with_servo_offset(job_args.read_enable.servo_offset);
+	DONE();
+}
+void xop_read_enable(int servo_offset)
+{
+	reset();
+	job_args.read_enable.servo_offset = servo_offset;
+	run(job_read_enable);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// read data ////////////////////////////////////////////////////////////////
+void job_read_data(void)
+{
+	read_data(
+		job_args.read_data.buffer_index,
+		job_args.read_data.n_32bit_words,
+		job_args.read_data.index_sync,
+		job_args.read_data.skip_checks);
+	DONE();
+}
+unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
+{
+	reset();
+	unsigned buffer_index = allocate_buffer(4*n_32bit_words);
+	job_args.read_data.buffer_index = buffer_index;
+	job_args.read_data.n_32bit_words = n_32bit_words;
+	job_args.read_data.index_sync = index_sync;
+	job_args.read_data.skip_checks = skip_checks;
+	run(job_read_data);
+	return buffer_index;
 }

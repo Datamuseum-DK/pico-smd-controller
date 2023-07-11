@@ -10,7 +10,8 @@
 #include "base.h"
 #include "command_parser.h"
 #include "clocked_read.h"
-#include "xjob.h"
+#include "controller_protocol.h"
+#include "xop.h"
 
 unsigned stdin_received_bytes = 0;
 unsigned is_subscribing_to_status = 0;
@@ -21,7 +22,7 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	switch (t) {
 	case DATA:     return GPIO_IN;
 	case STATUS:   return GPIO_IN;
-	case CTRL:     return GPIO_OUT;
+	case CONTROL:  return GPIO_OUT;
 	default: PANIC(PANIC_XXX);
 	}
 }
@@ -60,6 +61,17 @@ static void status_housekeeping(void)
 	}
 }
 
+static void handle_frontend_data_transfers(void)
+{
+	int written_buffer_index = get_written_buffer_index();
+	if (written_buffer_index < 0) return;
+	// XXX TODO transfer buffer; base64 encoded probably? not
+	// everything in one go; have some define that limits transfers
+	unsigned buffer_size = get_buffer_size(written_buffer_index);
+	printf(CPPP_DEBUG "TODO transfer buffer %d / sz=%d\n", written_buffer_index, buffer_size);
+	release_buffer(written_buffer_index);
+}
+
 static void parse(void)
 {
 	int got_char = getchar_timeout_us(0);
@@ -90,17 +102,66 @@ static void parse(void)
 		is_subscribing_to_status = command_parser.arguments[0].b;
 		printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 	} break;
-	case COMMAND_op_cancel: {
-		xjob_cancel();
+	case COMMAND_set_ctrl: {
+		unsigned ctrl = command_parser.arguments[0].u;
+		#define PUT(NAME) \
+			{ \
+				const unsigned mask = 1 << CONTROL_ ## NAME; \
+				gpio_put(GPIO_ ## NAME, ctrl & mask); \
+				ctrl = ctrl & ~mask; \
+			}
+		PUT(UNIT_SELECT_TAG)
+		PUT(TAG1)
+		PUT(TAG2)
+		PUT(TAG3)
+		PUT(BIT0)
+		PUT(BIT1)
+		PUT(BIT2)
+		PUT(BIT3)
+		PUT(BIT4)
+		PUT(BIT5)
+		PUT(BIT6)
+		PUT(BIT7)
+		PUT(BIT8)
+		PUT(BIT9)
+		#undef PUT
+		if (ctrl != 0) {
+			printf(CPPP_WARNING "unsupported remaining ctrl pins: %x", ctrl);
+		}
+	} break;
+	case COMMAND_terminate_op: {
+		terminate_op();
+	} break;
+	case COMMAND_op_raw_tag: {
+		const unsigned tag      = command_parser.arguments[0].u;
+		const unsigned argument = command_parser.arguments[1].u;
+		xop_raw_tag(tag, argument);
+	} break;
+	case COMMAND_op_rtz: {
+		xop_rtz();
 	} break;
 	case COMMAND_op_select_unit0: {
-		xjob_select_unit0();
+		xop_select_unit0();
 	} break;
 	case COMMAND_op_select_cylinder: {
-		xjob_select_cylinder(command_parser.arguments[0].u);
+		xop_select_cylinder(command_parser.arguments[0].u);
 	} break;
 	case COMMAND_op_select_head: {
-		xjob_select_head(command_parser.arguments[0].u);
+		xop_select_head(command_parser.arguments[0].u);
+	} break;
+	case COMMAND_op_read_enable: {
+		xop_read_enable(command_parser.arguments[0].i);
+	} break;
+	case COMMAND_op_read_data: {
+		if (!can_allocate_buffer()) {
+			printf(CPPP_ERROR "no buffer available\n");
+		} else {
+			unsigned buffer_index = xop_read_data(
+				command_parser.arguments[0].u,
+				command_parser.arguments[1].u,
+				command_parser.arguments[2].u);
+			printf(CPPP_DEBUG "reading into buffer %d\n", buffer_index);
+		}
 	} break;
 	default: {
 		printf(CPPP_ERROR "unhandled command %s/%d\n",
@@ -128,7 +189,6 @@ int main()
 	#undef PIN
 
 	clocked_read_init();
-	clocked_read_get_buffer(0); // XXX REMOVE ME temporarily prevents compiler from removing buffer
 
 	stdio_init_all();
 
@@ -137,6 +197,7 @@ int main()
 	for (;;) {
 		parse();
 		status_housekeeping();
+		handle_frontend_data_transfers();
 		//tight_loop_contents(); // does nothing
 		tud_task();
 	}
