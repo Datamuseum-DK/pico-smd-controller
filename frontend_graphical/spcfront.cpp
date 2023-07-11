@@ -444,9 +444,12 @@ int main(int argc, char** argv)
 	int basic_cylinder = 0;
 	int basic_head = 0;
 	int basic_servo_offset = 0;
-	int basic_32bit_word_count = DRIVE_BYTES_PER_TRACK/4;
 	bool basic_index_sync = true;
 	bool basic_skip_checks = false;
+	int batch_cylinder0 = 0;
+	int batch_cylinder1 = 822;
+	int batch_head_set = 31;
+	int common_32bit_word_count = ((DRIVE_BYTES_PER_TRACK/4)*31)/10;
 
 	const int font_size = 18;
 	ImFont* font = io.Fonts->AddFontFromFileTTF("Cousine-Regular.ttf", font_size);
@@ -574,8 +577,8 @@ int main(int argc, char** argv)
 					if (basic_servo_offset > 1) basic_servo_offset = 1;
 				} break;
 				case 4: {
-					ImGui::InputInt("32bit Word Count", &basic_32bit_word_count);
-					if (basic_32bit_word_count < 0) basic_32bit_word_count = 0;
+					ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
+					if (common_32bit_word_count < 0) common_32bit_word_count = 0;
 					ImGui::Checkbox("Index Sync", &basic_index_sync);
 					ImGui::SetItemTooltip("Waits until INDEX signal from drive before reading");
 					ImGui::Checkbox("Skip Checks", &basic_skip_checks);
@@ -599,7 +602,7 @@ int main(int argc, char** argv)
 					} break;
 					case 4: {
 						com_enqueue("op_read_data %d %d %d",
-							basic_32bit_word_count,
+							common_32bit_word_count,
 							basic_index_sync?1:0,
 							basic_skip_checks?1:0);
 					} break;
@@ -607,8 +610,35 @@ int main(int argc, char** argv)
 				}
 			}
 
-			if (ImGui::CollapsingHeader("Batch")) {
-				ImGui::Text("TODO");
+			if (ImGui::CollapsingHeader("Batch Read")) {
+				if (ImGui::InputInt("First cylinder", &batch_cylinder0)) {
+					if (batch_cylinder0 < 0) batch_cylinder0 = 0;
+					if (batch_cylinder0 >= DRIVE_CYLINDER_COUNT) batch_cylinder0 = DRIVE_CYLINDER_COUNT-1;
+					if (batch_cylinder0 > batch_cylinder1) batch_cylinder1 = batch_cylinder0;
+				}
+				if (ImGui::InputInt("Last cylinder (inclusive)", &batch_cylinder1)) {
+					if (batch_cylinder1 < 0) batch_cylinder1 = 0;
+					if (batch_cylinder1 >= DRIVE_CYLINDER_COUNT) batch_cylinder1 = DRIVE_CYLINDER_COUNT-1;
+					if (batch_cylinder1 < batch_cylinder0) batch_cylinder0 = batch_cylinder1;
+				}
+				ImGui::CheckboxFlags("Head 0", &batch_head_set, 1<<0);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 1", &batch_head_set, 1<<1);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 2", &batch_head_set, 1<<2);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 3", &batch_head_set, 1<<3);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 4", &batch_head_set, 1<<4);
+				ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
+				if (common_32bit_word_count < 0) common_32bit_word_count = 0;
+				if (ImGui::Button("Execute!")) {
+					com_enqueue("op_read_batch %d %d %d %d",
+						batch_cylinder0,
+						batch_cylinder1,
+						batch_head_set,
+						common_32bit_word_count);
+				}
 			}
 
 			if (ImGui::CollapsingHeader("Raw Tag")) {

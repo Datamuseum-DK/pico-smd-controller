@@ -129,18 +129,16 @@ static void select_unit0(void)
 	check_drive_error();
 }
 
-static void begin_drive_job(void)
+static void select_unit0_if_not_selected(void)
 {
 	if (!gpio_get(GPIO_UNIT_SELECTED)) {
 		select_unit0();
-	} else {
-		check_drive_error();
 	}
 }
 
 static void rtz_seek(void)
 {
-	begin_drive_job();
+	check_drive_error();
 	tag_raw(TAG3, TAG3BIT_RTZ_SEEK);
 	sleep_us(1000);
 	control_clear();
@@ -148,7 +146,7 @@ static void rtz_seek(void)
 
 static void read_enable_with_servo_offset(int offset)
 {
-	begin_drive_job();
+	check_drive_error();
 	const unsigned bits = TAG3BIT_READ_GATE
 		| (offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
 		:  offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
@@ -156,15 +154,20 @@ static void read_enable_with_servo_offset(int offset)
 	tag_raw(TAG3, bits);
 }
 
+static void read_enable()
+{
+	read_enable_with_servo_offset(0);
+}
+
 static void tag_select_cylinder(unsigned cylinder)
 {
-	begin_drive_job();
+	check_drive_error();
 	tag_raw(TAG1, cylinder & ((1<<10)-1));
 }
 
 static void select_cylinder(unsigned cylinder)
 {
-	begin_drive_job();
+	check_drive_error();
 	tag_select_cylinder(cylinder);
 	pin0_wait(GPIO_ON_CYLINDER, 50000);
 	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
@@ -178,13 +181,13 @@ static void select_cylinder(unsigned cylinder)
 
 static void tag_select_head(unsigned head)
 {
-	begin_drive_job();
+	check_drive_error();
 	tag_raw(TAG2, head & ((1<<3)-1));
 }
 
 static void select_head(unsigned head)
 {
-	begin_drive_job();
+	check_drive_error();
 	tag_select_head(head);
 	// a Christian Rovsing manual ("CR8044M DISK CONTROLLER PRODUCT
 	// SPECIFICATION", section 3.1.1.3) says they have 32/33 sectors per
@@ -196,7 +199,7 @@ static void select_head(unsigned head)
 
 static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
-	if (!skip_checks) begin_drive_job();
+	if (!skip_checks) check_drive_error();
 	if (index_sync) {
 		pin0_wait(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10);
 		pin1_wait(GPIO_INDEX, (1000000 / (DRIVE_RPS/3))); // wait at most 3 revolutions
@@ -261,6 +264,13 @@ union {
 		unsigned index_sync;
 		unsigned skip_checks;
 	} read_data;
+	struct {
+		unsigned n_32bit_words_per_track;
+		unsigned cylinder0;
+		unsigned cylinder1;
+		unsigned head_set;
+	} batch_read;
+
 } job_args;
 
 ////////////////////////////////////
@@ -321,6 +331,7 @@ void xop_select_unit0(void)
 // rtz / return to track zero ///////////////////////////////////////////////
 void job_rtz(void)
 {
+	select_unit0_if_not_selected();
 	rtz_seek();
 	DONE();
 }
@@ -335,6 +346,7 @@ void xop_rtz(void)
 // select cylinder //////////////////////////////////////////////////////////
 void job_select_cylinder(void)
 {
+	select_unit0_if_not_selected();
 	select_cylinder(job_args.select_cylinder.cylinder);
 	DONE();
 }
@@ -350,6 +362,7 @@ void xop_select_cylinder(unsigned cylinder)
 // select head //////////////////////////////////////////////////////////////
 void job_select_head(void)
 {
+	select_unit0_if_not_selected();
 	select_head(job_args.select_head.head);
 	DONE();
 }
@@ -364,6 +377,7 @@ void xop_select_head(unsigned head)
 // read enable //////////////////////////////////////////////////////////////
 void job_read_enable(void)
 {
+	select_unit0_if_not_selected();
 	read_enable_with_servo_offset(job_args.read_enable.servo_offset);
 	DONE();
 }
@@ -378,6 +392,7 @@ void xop_read_enable(int servo_offset)
 // read data ////////////////////////////////////////////////////////////////
 void job_read_data(void)
 {
+	select_unit0_if_not_selected();
 	read_data(
 		job_args.read_data.buffer_index,
 		job_args.read_data.n_32bit_words,
@@ -395,4 +410,49 @@ unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned ski
 	job_args.read_data.skip_checks = skip_checks;
 	run(job_read_data);
 	return buffer_index;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+// batch read ///////////////////////////////////////////////////////////////
+void job_batch_read(void)
+{
+	select_unit0_if_not_selected();
+	check_drive_error();
+	read_enable();
+	const unsigned cylinder0 = job_args.batch_read.cylinder0;
+	const unsigned cylinder1 = job_args.batch_read.cylinder1;
+	const unsigned head_set = job_args.batch_read.head_set;
+	const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
+	for (unsigned cylinder = cylinder0; cylinder <= cylinder1; cylinder++) {
+		select_cylinder(cylinder);
+		unsigned mask = 1;
+		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
+			if ((head_set & mask) == 0) continue;
+			select_head(head);
+			const absolute_time_t t0 = get_absolute_time();
+			while (!can_allocate_buffer()) {
+				if ((get_absolute_time() - t0) > 10000000) {
+					ERROR(XST_ERR_TIMEOUT);
+				}
+				sleep_us(5);
+			}
+			read_data(
+				// XXX combine these 2? I don't like the redundancy
+				allocate_buffer(n_32bit_words_per_track),
+				n_32bit_words_per_track,
+				/*index_sync=*/1,
+				/*skip_checks=*/0);
+		}
+	}
+	DONE();
+}
+void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, unsigned n_32bit_words_per_track)
+{
+	reset();
+	job_args.batch_read.n_32bit_words_per_track = n_32bit_words_per_track;
+	job_args.batch_read.cylinder0 = cylinder0;
+	job_args.batch_read.cylinder1 = cylinder1;
+	job_args.batch_read.head_set = head_set;
+	run(job_batch_read);
 }

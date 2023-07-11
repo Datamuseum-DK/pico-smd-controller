@@ -12,19 +12,20 @@
 
 //              name                      argfmt
 #define EMIT_COMMANDS \
-	COMMAND(get_status_descriptors,   ""    ) \
-	COMMAND(subscribe_to_status,      "b"   ) \
-	COMMAND(set_ctrl,                 "u"   ) \
-	COMMAND(led,                      "b"   ) \
-	COMMAND(terminate_op,             ""    ) \
-	COMMAND(op_blink_test,            "u"   ) \
-	COMMAND(op_raw_tag,               "uu"  ) \
-	COMMAND(op_select_unit0,          ""    ) \
-	COMMAND(op_rtz,                   ""    ) \
-	COMMAND(op_select_cylinder,       "u"   ) \
-	COMMAND(op_select_head,           "u"   ) \
-	COMMAND(op_read_enable,           "i"   ) \
-	COMMAND(op_read_data,             "uuu" )
+	COMMAND(get_status_descriptors,   ""     ) \
+	COMMAND(subscribe_to_status,      "b"    ) \
+	COMMAND(set_ctrl,                 "u"    ) \
+	COMMAND(led,                      "b"    ) \
+	COMMAND(terminate_op,             ""     ) \
+	COMMAND(op_blink_test,            "u"    ) \
+	COMMAND(op_raw_tag,               "uu"   ) \
+	COMMAND(op_select_unit0,          ""     ) \
+	COMMAND(op_rtz,                   ""     ) \
+	COMMAND(op_select_cylinder,       "u"    ) \
+	COMMAND(op_select_head,           "u"    ) \
+	COMMAND(op_read_enable,           "i"    ) \
+	COMMAND(op_read_data,             "uuu"  ) \
+	COMMAND(op_read_batch,            "uuuu" )
 
 // controller protocol payload prefixes: response from controller should begin
 // with one of these

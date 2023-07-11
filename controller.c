@@ -189,6 +189,14 @@ static void parse(void)
 			printf(CPPP_DEBUG "reading into buffer %d\n", buffer_index);
 		}
 	} break;
+	case COMMAND_op_read_batch: {
+		const unsigned cylinder0      = command_parser.arguments[0].u;
+		const unsigned cylinder1      = command_parser.arguments[1].u;
+		const unsigned head_set       = command_parser.arguments[2].u;
+		const unsigned n_32bit_words  = command_parser.arguments[3].u;
+		xop_read_batch(cylinder0, cylinder1, head_set, n_32bit_words);
+		is_job_polling = 1;
+	} break;
 	default: {
 		printf(CPPP_ERROR "unhandled command %s/%d\n",
 			command_to_string(command_parser.command),
