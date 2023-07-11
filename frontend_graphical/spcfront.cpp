@@ -440,6 +440,13 @@ int main(int argc, char** argv)
 	int raw_tag1_cylinder = 0;
 	int raw_tag2_head = 0;
 	int raw_tag3_flags = 0;
+	int basic_selected_index = 0;
+	int basic_cylinder = 0;
+	int basic_head = 0;
+	int basic_servo_offset = 0;
+	int basic_32bit_word_count = DRIVE_BYTES_PER_TRACK/4;
+	bool basic_index_sync = true;
+	bool basic_skip_checks = false;
 
 	int exiting = 0;
 	while (!exiting) {
@@ -534,13 +541,7 @@ int main(int argc, char** argv)
 		{ // controller control
 			ImGui::Begin("Controller Control");
 
-			#if 0
-			// TODO
 			if (ImGui::CollapsingHeader("Basic")) {
-				if (ImGui::Button("Select unit 0")) {
-					com_enqueue("op_select_unit0");
-				}
-
 				const char* items[] = {
 					"Select Unit 0",
 					"Select Cylinder",
@@ -554,12 +555,27 @@ int main(int argc, char** argv)
 					// nothing
 				} break;
 				case 1: {
+					ImGui::InputInt("Cylinder", &basic_cylinder);
+					if (basic_cylinder < 0) basic_cylinder = 0;
+					if (basic_cylinder >= DRIVE_CYLINDER_COUNT) basic_cylinder = DRIVE_CYLINDER_COUNT-1;
 				} break;
 				case 2: {
+					ImGui::InputInt("Head", &basic_head);
+					if (basic_head < 0) basic_head = 0;
+					if (basic_head >= DRIVE_HEAD_COUNT) basic_head = DRIVE_HEAD_COUNT-1;
 				} break;
 				case 3: {
+					ImGui::InputInt("Servo Offset", &basic_servo_offset);
+					if (basic_servo_offset < -1) basic_servo_offset = -1;
+					if (basic_servo_offset > 1) basic_servo_offset = 1;
 				} break;
 				case 4: {
+					ImGui::InputInt("32bit Word Count", &basic_32bit_word_count);
+					if (basic_32bit_word_count < 0) basic_32bit_word_count = 0;
+					ImGui::Checkbox("Index Sync", &basic_index_sync);
+					ImGui::SetItemTooltip("Waits until INDEX signal from drive before reading");
+					ImGui::Checkbox("Skip Checks", &basic_skip_checks);
+					ImGui::SetItemTooltip("Skip error/readyness checking; read regardless of status");
 				} break;
 				}
 
@@ -578,11 +594,14 @@ int main(int argc, char** argv)
 						com_enqueue("op_read_enable %d", basic_servo_offset);
 					} break;
 					case 4: {
+						com_enqueue("op_read_data %d %d %d",
+							basic_32bit_word_count,
+							basic_index_sync?1:0,
+							basic_skip_checks?1:0);
 					} break;
 					}
 				}
 			}
-			#endif
 
 			if (ImGui::CollapsingHeader("Raw Tag")) {
 				const char* items[] = {
@@ -669,6 +688,10 @@ int main(int argc, char** argv)
 
 				if (ImGui::Button("Clear Fault")) {
 					com_enqueue("op_raw_tag 3 %d", TAG3BIT_FAULT_CLEAR);
+				}
+
+				if (ImGui::Button("Clear Control")) {
+					com_enqueue("op_raw_tag 3 0");
 				}
 			}
 
