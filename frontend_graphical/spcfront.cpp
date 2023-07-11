@@ -29,6 +29,8 @@
 EMIT_COMMANDS
 #undef COMMAND
 
+#include "drive.h"
+
 struct cond {
 	int value;
 	pthread_cond_t pt_cond;
@@ -371,6 +373,23 @@ static ImU32 get_status_color(const char* nm, int st)
 	return ImGui::GetColorU32(ImVec4(r*m, g*m, b*m, 1.0));
 }
 
+static void push_danger_style(void)
+{
+	const float r = 0.8;
+	const float g = 0.0;
+	const float b = 0.2;
+	const float a0 = 0.2;
+	const float a1 = 0.5;
+	ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(r,g,b,1));
+	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(r+a0,g+a0,b+a0,1));
+	ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(r+a1,g+a1,b+a1,1));
+}
+
+static void pop_danger_style(void)
+{
+	ImGui::PopStyleColor(3);
+}
+
 int main(int argc, char** argv)
 {
 	if (argc != 2) {
@@ -417,6 +436,10 @@ int main(int argc, char** argv)
 
 	bool previous_debug_led = false,     debug_led = false;
 	int previous_debug_control_pins = 0, debug_control_pins = 0;
+	int raw_tag_selected_index = 3;
+	int raw_tag1_cylinder = 0;
+	int raw_tag2_head = 0;
+	int raw_tag3_flags = 0;
 
 	int exiting = 0;
 	while (!exiting) {
@@ -511,10 +534,100 @@ int main(int argc, char** argv)
 		{ // controller control
 			ImGui::Begin("Controller Control");
 
-			if (ImGui::CollapsingHeader("A")) {
+			#if 0
+			// TODO
+			if (ImGui::CollapsingHeader("Basic")) {
+				if (ImGui::Button("Select unit 0")) {
+					com_enqueue("op_select_unit0");
+				}
+
+				const char* items[] = {
+					"Select Unit 0",
+					"Select Cylinder",
+					"Select Head",
+					"Read Enable",
+					"Read Data",
+				};
+				ImGui::Combo("##selected_basic", &basic_selected_index, items, IM_ARRAYSIZE(items));
+				switch (basic_selected_index) {
+				case 0: {
+					// nothing
+				} break;
+				case 1: {
+				} break;
+				case 2: {
+				} break;
+				case 3: {
+				} break;
+				case 4: {
+				} break;
+				}
+
+				if (ImGui::Button("Execute!")) {
+					switch (basic_selected_index) {
+					case 0: {
+						com_enqueue("op_select_unit0");
+					} break;
+					case 1: {
+						com_enqueue("op_select_cylinder %d", basic_cylinder);
+					} break;
+					case 2: {
+						com_enqueue("op_select_head %d", basic_head);
+					} break;
+					case 3: {
+						com_enqueue("op_read_enable %d", basic_servo_offset);
+					} break;
+					case 4: {
+					} break;
+					}
+				}
+			}
+			#endif
+
+			if (ImGui::CollapsingHeader("Raw Tag")) {
+				const char* items[] = {
+					// same order as `enum tag`
+					"TAG_UNIT_SELECT",
+					"TAG1 (Cylinder)",
+					"TAG2 (Head)",
+					"TAG3 (Control)",
+				};
+				ImGui::Combo("##selected_raw_tag", &raw_tag_selected_index, items, IM_ARRAYSIZE(items));
+				switch (raw_tag_selected_index) {
+				case TAG_UNIT_SELECT: {
+					ImGui::Text("(always selects unit 0)");
+				} break;
+				case TAG1: {
+					ImGui::InputInt("Cylinder", &raw_tag1_cylinder);
+					if (raw_tag1_cylinder < 0) raw_tag1_cylinder = 0;
+					if (raw_tag1_cylinder >= DRIVE_CYLINDER_COUNT) raw_tag1_cylinder = DRIVE_CYLINDER_COUNT-1;
+				} break;
+				case TAG2: {
+					ImGui::InputInt("Head", &raw_tag2_head);
+					if (raw_tag2_head < 0) raw_tag2_head = 0;
+					if (raw_tag2_head >= DRIVE_HEAD_COUNT) raw_tag2_head = DRIVE_HEAD_COUNT-1;
+				} break;
+				case TAG3: {
+					#define BIT(NAME,DESC) \
+						ImGui::CheckboxFlags(#NAME, &raw_tag3_flags, TAG3BIT_ ## NAME); \
+						ImGui::SetItemTooltip("%s", DESC);
+					EMIT_TAG3_BITS
+					#undef CONTROL
+				} break;
+				}
+
+				if (ImGui::Button("Execute!")) {
+					com_enqueue("op_raw_tag %d %d",
+						raw_tag_selected_index,
+						raw_tag_selected_index == TAG_UNIT_SELECT ? 0 :
+						raw_tag_selected_index == TAG1 ? raw_tag1_cylinder :
+						raw_tag_selected_index == TAG2 ? raw_tag2_head :
+						raw_tag_selected_index == TAG3 ? raw_tag3_flags :
+						0);
+				}
 			}
 
-			if (ImGui::CollapsingHeader("Control pin debugging")) {
+			if (ImGui::CollapsingHeader("Control Pin Debugging")) {
 				{
 					int mask = 1;
 					#define CONTROL(NAME,SUPPORTED) \
@@ -533,15 +646,29 @@ int main(int argc, char** argv)
 						mask <<= 1;
 					EMIT_CONTROLS
 					#undef CONTROL
+					debug_led = 1;
 				}
 				if (ImGui::Button("Clear all")) {
 					debug_control_pins = 0;
+					debug_led = 0;
 				}
 			}
 
-			if (ImGui::CollapsingHeader("Misc")) {
-				if (ImGui::Button("Toggle LED")) {
-					debug_led = !debug_led;
+			if (ImGui::CollapsingHeader("Fire Extinguishers")) {
+				{
+					push_danger_style();
+					if (ImGui::Button("TERMINATE OPERATION")) {
+						com_enqueue("terminate_op");
+					}
+					pop_danger_style();
+				}
+
+				if (ImGui::Button("RTZ")) {
+					com_enqueue("op_rtz");
+				}
+
+				if (ImGui::Button("Clear Fault")) {
+					com_enqueue("op_raw_tag 3 %d", TAG3BIT_FAULT_CLEAR);
 				}
 			}
 

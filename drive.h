@@ -10,5 +10,8 @@
 #define DRIVE_RPM                 (3600)
 #define DRIVE_RPS                 (DRIVE_RPM/60)
 
+#define DRIVE_CYLINDER_COUNT      (1024)
+#define DRIVE_HEAD_COUNT          (5)
+
 #define DRIVE_H
 #endif
