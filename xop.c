@@ -204,7 +204,7 @@ static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsi
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {
 		if (!clocked_read_is_running()) break;
-		check_drive_error();
+		if (!skip_checks) check_drive_error();
 		sleep_us(1);
 	}
 	wrote_buffer(buffer_index);

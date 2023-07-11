@@ -144,6 +144,7 @@ static void parse(void)
 	} break;
 	case COMMAND_terminate_op: {
 		terminate_op();
+		printf(CPPP_INFO "TERMINATE!\n");
 	} break;
 	case COMMAND_op_blink_test: {
 		int fail = command_parser.arguments[0].u;
