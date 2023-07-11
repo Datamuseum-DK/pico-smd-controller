@@ -170,7 +170,9 @@ static void select_cylinder(unsigned cylinder)
 {
 	check_drive_error();
 	tag_select_cylinder(cylinder);
-	pin0_wait(GPIO_ON_CYLINDER, 50000);
+	// Assuming it might take a little while before ON_CYLINDER and
+	// SEEK_END go low?
+	sleep_us(1000);
 	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
 	// pin_mask_wait()) if the seek does not complete within 500ms
 	const unsigned bits = (1<<GPIO_ON_CYLINDER) | (1<<GPIO_SEEK_END);
