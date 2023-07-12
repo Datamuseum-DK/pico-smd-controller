@@ -29,6 +29,7 @@
 	PIN(CONTROL,   BIT7,            26   ) \
 	PIN(CONTROL,   BIT8,            27   ) \
 	PIN(CONTROL,   BIT9,            28   ) \
+	PIN(DBGCLK,    DEBUGCLK_10MHZ,  15   )
 
 // Naming matches figure 3-11 in this document:
 // https://bitsavers.org/pdf/cdc/discs/smd/83322200M_CDC_BK4XX_BK5XX_Hardware_Reference_Manual_Jun1980.pdf
@@ -37,6 +38,7 @@ enum gpio_type { // <- first PIN() column
 	DATA     = 1, // input: 9.67MHz data rate
 	STATUS,       // input: low bitrate
 	CONTROL,      // output: low bitrate
+	DBGCLK,       // output: ~10MHz test signal
 };
 
 enum gpio_map {

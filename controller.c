@@ -12,6 +12,7 @@
 #include "clocked_read.h"
 #include "controller_protocol.h"
 #include "xop.h"
+#include "dbgclk.pio.h"
 
 unsigned stdin_received_bytes;
 unsigned is_subscribing_to_status;
@@ -26,6 +27,7 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	case DATA:     return GPIO_IN;
 	case STATUS:   return GPIO_IN;
 	case CONTROL:  return GPIO_OUT;
+	case DBGCLK:   return GPIO_OUT;
 	default: PANIC(PANIC_XXX);
 	}
 }
@@ -212,6 +214,21 @@ static void parse(void)
 	}
 }
 
+static void dbgclk_start(void)
+{
+	const PIO pio = pio1;
+	const uint offset = pio_add_program(pio, &dbgclk_program);
+	const uint sm = pio_claim_unused_sm(pio, true);
+	pio_sm_config cfg = dbgclk_program_get_default_config(0);
+	const unsigned gpio_pin = GPIO_DEBUGCLK_10MHZ;
+	pio_gpio_init(pio, gpio_pin);
+	sm_config_set_set_pins(&cfg, gpio_pin, 1);
+	//pio_sm_set_consecutive_pindirs(pio, sm, gpio_pin, /*pin_count=*/1, /*is_out=*/true);
+	sm_config_set_clkdiv_int_frac(&cfg, 3, 0); // XXX trying to aim for ~10MHz
+	pio_sm_init(pio, sm, offset, &cfg);
+	pio_sm_set_enabled(pio, sm, true);
+}
+
 int main()
 {
 	// I/O pin config
@@ -230,6 +247,7 @@ int main()
 	#undef PIN
 
 	clocked_read_init();
+	dbgclk_start();
 
 	stdio_init_all();
 

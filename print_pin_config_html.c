@@ -40,6 +40,10 @@ const char* HEADER =
 "	background: #cde;\n"
 "}\n"
 "\n"
+".output_debug {\n"
+"	background: #dae;\n"
+"}\n"
+"\n"
 ".legend {\n"
 "	display: inline-block;\n"
 "	width: 1em;\n"
@@ -135,7 +139,8 @@ static const char* get_label_class(int e)
 {
 	const char* in = "label input";
 	const char* out = "label output";
-	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return TYPE==DATA?in:TYPE==STATUS?in:TYPE==CONTROL?out:"";
+	const char* out_debug = "label output_debug";
+	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return TYPE==DATA?in:TYPE==STATUS?in:TYPE==CONTROL?out:TYPE==DBGCLK?out_debug:"";
 	EMIT_PIN_CONFIG
 	#undef PIN
 	return "";

@@ -1,0 +1,9 @@
+.program dbgclk
+; Debug clock signal
+    set pindirs, 1
+.wrap_target
+again:
+    set pins, 0 [1]
+    set pins, 1
+    jmp again
+.wrap
