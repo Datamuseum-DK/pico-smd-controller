@@ -451,6 +451,8 @@ int main(int argc, char** argv)
 	int common_32bit_word_count = ((DRIVE_BYTES_PER_TRACK/4)*31)/10;
 	int common_servo_offset = 0;
 	int common_data_strobe_delay = 0;
+	bool poll_gpio = false;
+	uint32_t last_poll_gpio = 0;
 
 	const int font_size = 18;
 	ImFont* font = io.Fonts->AddFontFromFileTTF("Cousine-Regular.ttf", font_size);
@@ -722,6 +724,7 @@ int main(int argc, char** argv)
 				if (ImGui::Button("Execute Blink Test Job (Fail)")) {
 					com_enqueue("op_blink_test 1");
 				}
+				ImGui::Checkbox("Poll all GPIO (see log output)", &poll_gpio);
 			}
 
 			if (ImGui::CollapsingHeader("Fire Extinguishers")) {
@@ -772,6 +775,14 @@ int main(int argc, char** argv)
 		if (debug_led != previous_debug_led) {
 			com_enqueue("led %d", debug_led?1:0);
 			previous_debug_led = debug_led;
+		}
+
+		if (poll_gpio) {
+			uint32_t t = SDL_GetTicks();
+			if (t > (last_poll_gpio + 100)) {
+				com_enqueue("poll_gpio");
+				last_poll_gpio = t;
+			}
 		}
 
 		pthread_rwlock_unlock(&com.rwlock);

@@ -14,6 +14,7 @@
 #define EMIT_COMMANDS \
 	COMMAND(get_status_descriptors,   ""         ) \
 	COMMAND(subscribe_to_status,      "b"        ) \
+	COMMAND(poll_gpio,                ""         ) \
 	COMMAND(set_ctrl,                 "u"        ) \
 	COMMAND(led,                      "b"        ) \
 	COMMAND(terminate_op,             ""         ) \

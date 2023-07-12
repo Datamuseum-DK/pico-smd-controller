@@ -115,6 +115,9 @@ static void parse(void)
 		is_subscribing_to_status = command_parser.arguments[0].b;
 		printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 	} break;
+	case COMMAND_poll_gpio: {
+		printf(CPPP_INFO " GPIO %lx\n", gpio_get_all() & ~0x1000000);
+	} break;
 	case COMMAND_set_ctrl: {
 		unsigned ctrl = command_parser.arguments[0].u;
 		#define PUT(NAME) \
