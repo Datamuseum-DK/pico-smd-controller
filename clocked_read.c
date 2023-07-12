@@ -8,8 +8,9 @@
 #define READ_PIO         pio0
 #define READ_DMA_CHANNEL (0)
 uint8_t read_buffer[CLOCKED_READ_BUFFER_COUNT][CLOCKED_READ_BUFFER_SIZE];
-unsigned buffer_size[CLOCKED_READ_BUFFER_COUNT];
-enum buffer_status buffer_status[CLOCKED_READ_BUFFER_COUNT];
+unsigned read_buffer_size[CLOCKED_READ_BUFFER_COUNT];
+enum buffer_status read_buffer_status[CLOCKED_READ_BUFFER_COUNT];
+char read_buffer_filename[CLOCKED_READ_BUFFER_COUNT][CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH];
 uint read_sm;
 
 void clocked_read_init(void)
@@ -25,7 +26,7 @@ static void check_buffer_index(unsigned buffer_index)
 void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count)
 {
 	check_buffer_index(buffer_index);
-	if (buffer_status[buffer_index] != BUSY) PANIC(PANIC_UNEXPECTED_STATE);
+	if (read_buffer_status[buffer_index] != BUSY) PANIC(PANIC_UNEXPECTED_STATE);
 
 	const PIO pio = READ_PIO;
 	const uint sm = read_sm;
@@ -64,7 +65,7 @@ int clocked_read_is_running(void)
 static int find_buffer_index(enum buffer_status with_buffer_status)
 {
 	for (unsigned i = 0; i < CLOCKED_READ_BUFFER_COUNT; i++) {
-		if (buffer_status[i] == with_buffer_status) {
+		if (read_buffer_status[i] == with_buffer_status) {
 			return i;
 		}
 	}
@@ -81,7 +82,6 @@ int get_written_buffer_index(void)
 	return find_buffer_index(WRITTEN);
 }
 
-
 unsigned can_allocate_buffer(void)
 {
 	return get_next_free_buffer_index() >= 0;
@@ -92,9 +92,9 @@ unsigned allocate_buffer(unsigned size)
 	int i = get_next_free_buffer_index();
 	if (i < 0) PANIC(PANIC_ALLOCATION_ERROR);
 	check_buffer_index(i);
-	buffer_status[i] = BUSY;
+	read_buffer_status[i] = BUSY;
 	if (size > CLOCKED_READ_BUFFER_SIZE) size = CLOCKED_READ_BUFFER_SIZE;
-	buffer_size[i] = size;
+	read_buffer_size[i] = size;
 	return i;
 }
 
@@ -104,28 +104,34 @@ uint8_t* get_buffer_data(unsigned buffer_index)
 	return read_buffer[buffer_index];
 }
 
+char* get_buffer_filename(unsigned buffer_index)
+{
+	check_buffer_index(buffer_index);
+	return read_buffer_filename[buffer_index];
+}
+
 enum buffer_status get_buffer_status(unsigned buffer_index)
 {
 	check_buffer_index(buffer_index);
-	return buffer_status[buffer_index];
+	return read_buffer_status[buffer_index];
 }
 
 void release_buffer(unsigned buffer_index)
 {
 	check_buffer_index(buffer_index);
-	if (buffer_status[buffer_index] != WRITTEN) PANIC(PANIC_UNEXPECTED_STATE);
-	buffer_status[buffer_index] = FREE;
+	if (read_buffer_status[buffer_index] != WRITTEN) PANIC(PANIC_UNEXPECTED_STATE);
+	read_buffer_status[buffer_index] = FREE;
 }
 
 void wrote_buffer(unsigned buffer_index)
 {
 	check_buffer_index(buffer_index);
-	if (buffer_status[buffer_index] != BUSY) PANIC(PANIC_UNEXPECTED_STATE);
-	buffer_status[buffer_index] = WRITTEN;
+	if (read_buffer_status[buffer_index] != BUSY) PANIC(PANIC_UNEXPECTED_STATE);
+	read_buffer_status[buffer_index] = WRITTEN;
 }
 
 unsigned get_buffer_size(unsigned buffer_index)
 {
 	check_buffer_index(buffer_index);
-	return buffer_size[buffer_index];
+	return read_buffer_size[buffer_index];
 }

@@ -6,6 +6,7 @@
 // anything else to use core1 for? (all the high bandwidth heavy lifting is
 // entirely handled by PIO/DMA)
 
+#include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/multicore.h"
 
@@ -407,11 +408,18 @@ void xop_read_enable(int servo_offset, int data_strobe_delay)
 
 /////////////////////////////////////////////////////////////////////////////
 // read data ////////////////////////////////////////////////////////////////
+unsigned next_read_data_serial = 1;
 void job_read_data(void)
 {
 	select_unit0_if_not_selected();
+	const unsigned buffer_index = job_args.read_data.buffer_index;
+	snprintf(
+		get_buffer_filename(buffer_index),
+		CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
+		"custom%.4d.nrz",
+		next_read_data_serial++);
 	read_data(
-		job_args.read_data.buffer_index,
+		buffer_index,
 		job_args.read_data.n_32bit_words,
 		job_args.read_data.index_sync,
 		job_args.read_data.skip_checks);
@@ -420,7 +428,7 @@ void job_read_data(void)
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
 	reset();
-	unsigned buffer_index = allocate_buffer(4*n_32bit_words);
+	const unsigned buffer_index = allocate_buffer(4*n_32bit_words);
 	job_args.read_data.buffer_index = buffer_index;
 	job_args.read_data.n_32bit_words = n_32bit_words;
 	job_args.read_data.index_sync = index_sync;
@@ -465,6 +473,11 @@ void job_batch_read(void)
 				}
 				sleep_us(5);
 			}
+			const unsigned buffer_index = allocate_buffer(n_32bit_words_per_track);
+			snprintf(
+				get_buffer_filename(buffer_index),
+				CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
+				"cylinder%.4d-head%d.nrz", cylinder, head);
 			read_data(
 				// XXX combine these 2? I don't like the redundancy
 				allocate_buffer(n_32bit_words_per_track),
