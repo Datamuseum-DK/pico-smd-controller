@@ -63,15 +63,70 @@ static void status_housekeeping(void)
 	}
 }
 
+#define DATA_TRANSFER_BYTES_PER_LINE (60)
+_Static_assert((DATA_TRANSFER_BYTES_PER_LINE % 3) == 0, "must be divisible by 3 (to make base-64 encoding easier)");
+#define DATA_TRANSFER_CHARACTERS_PER_LINE ((DATA_TRANSFER_BYTES_PER_LINE/3)*4)
+#define DATA_TRANSFER_LINES_PER_CHUNK (10)
+
+struct {
+	int is_transfering;
+	unsigned buffer_index;
+	unsigned bytes_transferred;
+	unsigned sequence;
+} data_transfer;
+
+static inline char get_base64_digit(unsigned v)
+{
+	if (v >= 64) PANIC(PANIC_XXX);
+	return (BASE64_DIGITS)[v];
+}
+
 static void handle_frontend_data_transfers(void)
 {
-	int written_buffer_index = get_written_buffer_index();
-	if (written_buffer_index < 0) return;
+	if (!data_transfer.is_transfering) {
+		int buffer_index = get_written_buffer_index();
+		if (buffer_index < 0) {
+			// nothing to transfer
+			return;
+		}
+
+		data_transfer.is_transfering = 1;
+		data_transfer.buffer_index = buffer_index;
+		data_transfer.bytes_transferred = 0;
+		printf("%s %d %s\n", CPPP_DATA_HEADER, get_buffer_size(buffer_index), get_buffer_filename(buffer_index));
+	}
+
+	if (!data_transfer.is_transfering) PANIC(PANIC_XXX);
+	int chunk_lines_remaining = DATA_TRANSFER_LINES_PER_CHUNK;
+	while (chunk_lines_remaining > 0) {
+		uint8_t* buffer_begin = get_buffer_data(data_transfer.buffer_index);
+		uint8_t* buffer_end = buffer_begin + get_buffer_size(data_transfer.buffer_index);
+		uint8_t* window_begin = buffer_begin + data_transfer.bytes_transferred;
+		uint8_t* window_end = window_begin + DATA_TRANSFER_BYTES_PER_LINE;
+		char line[DATA_TRANSFER_CHARACTERS_PER_LINE+20];
+		if (window_end <= buffer_end) {
+			int offset = snprintf(line, sizeof line, "%s %.05d ", CPPP_DATA_LINE, data_transfer.sequence);
+			uint8_t* rp = window_begin;
+			char* wp = line + offset;
+			for (unsigned i0 = 0; i0 < DATA_TRANSFER_BYTES_PER_LINE; i0 += 3) {
+				uint8_t b0 = *(rp)++;
+				uint8_t b1 = *(rp)++;
+				uint8_t b2 = *(rp)++;
+				*(wp++) = get_base64_digit(b0 & 0x3f);                             // 000000
+				*(wp++) = get_base64_digit(((b0 >> 6) & 0x3) | ((b1 & 0xf) << 2)); // 001111
+				*(wp++) = get_base64_digit(((b1 >> 4) & 0xf) | ((b2 & 0x3) << 4)); // 111122
+				*(wp++) = get_base64_digit(b2 >> 2);                               // 222222
+			}
+		} else {
+			//window_end = buffer_end;
+		}
+		puts(line);
+		data_transfer.sequence++;
+	}
+
+
 	// XXX TODO transfer buffer; base64 encoded probably? not
 	// everything in one go; have some define that limits transfers
-	unsigned buffer_size = get_buffer_size(written_buffer_index);
-	printf(CPPP_DEBUG "TODO transfer buffer %d / sz=%d\n", written_buffer_index, buffer_size);
-	release_buffer(written_buffer_index);
 }
 
 static void handle_job_status(void)

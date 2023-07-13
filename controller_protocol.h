@@ -33,6 +33,9 @@
 #define CPPP_STATUS_DESCRIPTORS "DS"
 #define CPPP_STATUS             "ST"
 #define CPPP_STATUS_TIME        "S0"
+#define CPPP_DATA_HEADER        "F0"
+#define CPPP_DATA_LINE          "F1"
+#define CPPP_DATA_FOOTTER       "F2"
 #define CPPP_LOG "["
 #define CPPP_ERROR   CPPP_LOG"ERROR] "
 #define CPPP_WARNING CPPP_LOG"WARNING] "
@@ -102,6 +105,8 @@ enum tag3bit {
 	#undef BIT
 };
 
+#define BASE64_DIGITS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+//                     0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
 
 #define CONTROLLER_PROTOCOL_H
 #endif
