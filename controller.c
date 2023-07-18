@@ -103,7 +103,7 @@ static void handle_frontend_data_transfers(void)
 		int offset = snprintf(line, sizeof line, "%s %.05d ", CPPP_DATA_LINE, data_transfer.sequence++);
 		if (offset <= 0) PANIC(PANIC_XXX);
 		wp += offset;
-		wp = b64_enc(wp, get_buffer_data(data_transfer.buffer_index) + data_transfer.bytes_transferred, n);
+		wp = b64_encode(wp, get_buffer_data(data_transfer.buffer_index) + data_transfer.bytes_transferred, n);
 		*(wp++) = '\n';
 		*(wp++) = 0;
 		puts(line);
