@@ -148,21 +148,11 @@ int dec(uint8_t* output, char* input)
 	return n;
 }
 
-static void test0(int d, const char* expected_base64)
+static void test0(int d, uint8_t* xs, size_t nxs, const char* expected_base64)
 {
-	uint8_t xs[] = {
-		0x10, 0x20, 0x30,
-		0x60, 0x70, 0x90,
-		0xB0, 0xC0, 0xD0,
-		0xFF, 0xEE, 0xDD,
-		0x01, 0x02, 0x03,
-		0x3c, 0x3b, 0x3a,
-		0x77, 0x66, 0x55,
-	};
 	uint8_t ys[1<<10];
 	char line[1<<10];
-
-	const int n = ARRAY_LENGTH(xs) - d;
+	const int n = nxs - d;
 	enc(line, xs, n);
 	assert(strcmp(line, expected_base64) == 0);
 	assert(strlen(line) == ((n+2)/3)*4);
@@ -187,10 +177,22 @@ static void testfuzz(void)
 
 int main(int argc, char** argv)
 {
-	test0(0, "ECAwYHCQsMDQ/+7dAQIDPDs6d2ZV");
-	test0(1, "ECAwYHCQsMDQ/+7dAQIDPDs6d2Y=");
-	test0(2, "ECAwYHCQsMDQ/+7dAQIDPDs6dw==");
-	test0(3, "ECAwYHCQsMDQ/+7dAQIDPDs6");
+	{
+		uint8_t xs[] = {
+			0x10, 0x20, 0x30,
+			0x60, 0x70, 0x90,
+			0xB0, 0xC0, 0xD0,
+			0xFF, 0xEE, 0xDD,
+			0x01, 0x02, 0x03,
+			0x3c, 0x3b, 0x3a,
+			0x77, 0x66, 0x55,
+		};
+		const size_t nxs = ARRAY_LENGTH(xs);
+		test0(0, xs, nxs, "ECAwYHCQsMDQ/+7dAQIDPDs6d2ZV");
+		test0(1, xs, nxs, "ECAwYHCQsMDQ/+7dAQIDPDs6d2Y=");
+		test0(2, xs, nxs, "ECAwYHCQsMDQ/+7dAQIDPDs6dw==");
+		test0(3, xs, nxs, "ECAwYHCQsMDQ/+7dAQIDPDs6");
+	}
 
 	testfuzz();
 
