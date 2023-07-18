@@ -193,16 +193,7 @@ static void parse(void)
 			printf(CPPP_WARNING "unsupported remaining ctrl pins: %x", ctrl);
 		}
 	} break;
-	case COMMAND_terminate_op: {
-		terminate_op();
-		printf(CPPP_INFO "TERMINATE!\n");
-	} break;
-	case COMMAND_op_blink_test: {
-		int fail = command_parser.arguments[0].u;
-		xop_blink_test(fail);
-		is_job_polling = 1;
-	} break;
-	case COMMAND_op_xfer_test: {
+	case COMMAND_xfer_test: {
 		if (!can_allocate_buffer()) {
 			printf(CPPP_ERROR "no buffer available\n");
 		} else {
@@ -217,6 +208,15 @@ static void parse(void)
 			}
 			wrote_buffer(buffer_index);
 		}
+	} break;
+	case COMMAND_terminate_op: {
+		terminate_op();
+		printf(CPPP_INFO "TERMINATE!\n");
+	} break;
+	case COMMAND_op_blink_test: {
+		int fail = command_parser.arguments[0].u;
+		xop_blink_test(fail);
+		is_job_polling = 1;
 	} break;
 	case COMMAND_op_raw_tag: {
 		const unsigned tag      = command_parser.arguments[0].u;

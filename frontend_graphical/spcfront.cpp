@@ -855,11 +855,11 @@ int main(int argc, char** argv)
 				}
 				ImGui::Checkbox("Poll all GPIO (see log output)", &poll_gpio);
 				if (ImGui::Button("Execute Data Download Test (1000b)")) {
-					com_enqueue("op_xfer_test 1000");
+					com_enqueue("xfer_test 1000");
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Execute Data Download Test (10000b)")) {
-					com_enqueue("op_xfer_test 10000");
+					com_enqueue("xfer_test 10000");
 				}
 			}
 
