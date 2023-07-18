@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
@@ -30,6 +31,9 @@ EMIT_COMMANDS
 #undef COMMAND
 
 #include "drive.h"
+#include "b64.h"
+void PANIC(uint32_t error) { fprintf(stderr, "PANIC(%d)\n", error); abort(); } // heh
+#include "b64.c" // eheheh
 
 struct cond {
 	int value;
@@ -69,6 +73,14 @@ struct controller_status {
 	uint32_t status;
 };
 
+struct com_file {
+	int in_use;
+	int fd;
+	int sequence;
+	size_t bytes_written;
+	size_t bytes_total;
+};
+
 struct com {
 	char** status_descriptor_arr;
 	struct cond ready_cond;
@@ -83,6 +95,8 @@ struct com {
 	char** controller_log;
 	struct controller_status* controller_status_arr;
 	uint64_t controller_timestamp_us;
+
+	struct com_file file;
 } com;
 
 static int starts_with(char* s, const char* prefix)
@@ -109,13 +123,35 @@ static char* duplicate_string(char* s) // strdup() is deprecated?
 	return (char*)p;
 }
 
+static void end_com_file(void)
+{
+	struct com_file* cf = &com.file;
+	if (!cf->in_use) return;
+	close(cf->fd);
+	memset(cf, 0, sizeof *cf);
+}
+
+__attribute__((format(printf, 1, 2)))
+static void com_printf(const char* fmt, ...)
+{
+	char buf[1<<16];
+	va_list ap;
+	va_start(ap, fmt);
+	int n = vsnprintf(buf, sizeof buf, fmt, ap);
+	va_end(ap);
+	char* msg = (char*)malloc(n+1);
+	memcpy(msg, buf, n+1);
+	arrput(com.controller_log, msg);
+}
+
 static void bad_msg(char* msg)
 {
-	printf("WARNING: garbage message from controller: [%s]\n", msg);
+	com_printf("WARNING: garbage message from controller: [%s]\n", msg);
 }
 
 static void com__handle_msg(char* msg)
 {
+	struct com_file* comfile = &com.file;
 	if (starts_with(msg, CPPP_LOG)) {
 		printf("(CTRL) %s\n", msg);
 		msg = duplicate_string(msg);
@@ -125,7 +161,6 @@ static void com__handle_msg(char* msg)
 	} else if (is_payload(msg, CPPP_STATUS_DESCRIPTORS)) {
 		assert((com.status_descriptor_arr == NULL) && "seen twice? that's probably not thread-safe...");
 		char* p = msg + strlen(CPPP_STATUS_DESCRIPTORS);
-		//printf("%s\n", p);
 		for (;;) {
 			char c = *p;
 			if (c == 0) break;
@@ -174,6 +209,100 @@ static void com__handle_msg(char* msg)
 			pthread_rwlock_unlock(&com.rwlock);
 		} else {
 			bad_msg(msg);
+		}
+	} else if (is_payload(msg, CPPP_DATA_HEADER)) {
+		char* p = msg + strlen(CPPP_DATA_HEADER);
+		int n_bytes = -1;
+		char filename[1<<10];
+		if (sscanf(p, " %d %s", &n_bytes, filename) == 2) {
+			assert(!comfile->in_use);
+			char other_filename[1<<11];
+			char* path = filename;
+			for (;;) {
+				int fd = open(path, O_CREAT | O_EXCL | O_WRONLY, 0644);
+				if (fd == -1) {
+					if (errno == EEXIST) {
+						snprintf(
+							other_filename, sizeof other_filename,
+							"%s-resolv%d", filename, rand());
+						path = other_filename;
+						continue;
+					} else {
+						fprintf(stderr, "%s: %s\n", path, strerror(errno));
+						exit(EXIT_FAILURE);
+					}
+				}
+				memset(comfile, 0, sizeof *comfile);
+				comfile->in_use = 1;
+				comfile->fd = fd;
+				comfile->bytes_total = n_bytes;
+				com_printf("D/L %d bytes [%s]...\n", n_bytes, path);
+				break;
+			}
+		} else {
+			bad_msg(msg);
+		}
+	} else if (is_payload(msg, CPPP_DATA_LINE)) {
+		if (!comfile->in_use) {
+			com_printf("WARNING: out of sequence (not-in-use) data line [%s]\n", msg);
+		} else {
+			char* p = msg + strlen(CPPP_DATA_LINE);
+			int sequence = -1;
+			char b64[1<<10];
+			if (sscanf(p, " %d %s", &sequence, b64) == 2) {
+				if (sequence != comfile->sequence) {
+					com_printf("WARNING: out of sequence (expected %d, got %d) data line [%s]\n", comfile->sequence, sequence, msg);
+					end_com_file();
+					return;
+				} else {
+					comfile->sequence++;
+					uint8_t buffer[1<<10];
+					uint8_t* eb = b64_decode_line(buffer, b64);
+					if (eb == NULL) {
+						com_printf("WARNING: could not decode data line [%s]\n", msg);
+						end_com_file();
+						return;
+					} else {
+						size_t remaining = eb - buffer;
+						uint8_t* tp = buffer;
+						while (remaining > 0) {
+							ssize_t nw = write(comfile->fd, tp, remaining);
+							if (nw == -1) {
+								if (errno == EINTR) {
+									continue;
+								} else {
+									assert(!"write error");
+								}
+							}
+							tp += nw;
+							remaining -= nw;
+						}
+					}
+				}
+			} else {
+				bad_msg(msg);
+				end_com_file();
+			}
+		}
+	} else if (is_payload(msg, CPPP_DATA_FOOTER)) {
+		char* p = msg + strlen(CPPP_DATA_FOOTER);
+		if (!comfile->in_use) {
+			com_printf("WARNING: out of sequence (not-in-use) footer [%s]\n", msg);
+		} else {
+			int sequence = -1;
+			int TODO_checksum = -1;
+			if (sscanf(p, " %d %d", &sequence, &TODO_checksum) == 2) {
+				if (sequence != comfile->sequence) {
+					com_printf("WARNING: out of sequence (expected %d, got %d) footer [%s]\n", comfile->sequence, sequence, msg);
+					end_com_file();
+					return;
+				}
+				close(comfile->fd);
+				comfile->in_use = 0;
+			} else {
+				bad_msg(msg);
+				end_com_file();
+			}
 		}
 	} else {
 		bad_msg(msg);

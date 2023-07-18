@@ -86,9 +86,9 @@ static void handle_frontend_data_transfers(void)
 			return;
 		}
 
+		memset(&data_transfer, 0, sizeof data_transfer);
 		data_transfer.is_transfering = 1;
 		data_transfer.buffer_index = buffer_index;
-		data_transfer.bytes_transferred = 0;
 		data_transfer.bytes_total = get_buffer_size(buffer_index);
 		printf("%s %d %s\n", CPPP_DATA_HEADER, data_transfer.bytes_total, get_buffer_filename(buffer_index));
 	}
@@ -112,7 +112,7 @@ static void handle_frontend_data_transfers(void)
 		if (data_transfer.bytes_transferred == data_transfer.bytes_total) {
 			data_transfer.is_transfering = 0;
 			release_buffer(buffer_index);
-			printf("%s %d, %d\n", CPPP_DATA_FOOTER, data_transfer.sequence, /*FIXME checksum?*/0);
+			printf("%s %.05d %d\n", CPPP_DATA_FOOTER, data_transfer.sequence, /*FIXME checksum?*/0);
 			break;
 		} else if (data_transfer.bytes_transferred > data_transfer.bytes_total) {
 			PANIC(PANIC_XXX);
@@ -209,7 +209,7 @@ static void parse(void)
 			unsigned size = command_parser.arguments[0].u;
 			const unsigned buffer_index = allocate_buffer(size);
 			char* s = get_buffer_filename(buffer_index);
-			snprintf(s, CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH, "i%d-%db.garbage", buffer_index, size);
+			snprintf(s, CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH, "_xfertest-bufidx%d-%dbytes.garbage", buffer_index, size);
 			size = get_buffer_size(buffer_index); // may be truncated
 			uint8_t* p = get_buffer_data(buffer_index);
 			for (unsigned i = 0; i < size; i++) {
