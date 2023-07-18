@@ -19,6 +19,7 @@
 	COMMAND(led,                      "b"        ) \
 	COMMAND(terminate_op,             ""         ) \
 	COMMAND(op_blink_test,            "u"        ) \
+	COMMAND(op_xfer_test,             "u"        ) \
 	COMMAND(op_raw_tag,               "uu"       ) \
 	COMMAND(op_select_unit0,          ""         ) \
 	COMMAND(op_rtz,                   ""         ) \
@@ -35,7 +36,7 @@
 #define CPPP_STATUS_TIME        "S0"
 #define CPPP_DATA_HEADER        "F0"
 #define CPPP_DATA_LINE          "F1"
-#define CPPP_DATA_FOOTTER       "F2"
+#define CPPP_DATA_FOOTER        "F2"
 #define CPPP_LOG "["
 #define CPPP_ERROR   CPPP_LOG"ERROR] "
 #define CPPP_WARNING CPPP_LOG"WARNING] "

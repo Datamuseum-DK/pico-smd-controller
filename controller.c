@@ -103,13 +103,16 @@ static void handle_frontend_data_transfers(void)
 		int offset = snprintf(line, sizeof line, "%s %.05d ", CPPP_DATA_LINE, data_transfer.sequence++);
 		if (offset <= 0) PANIC(PANIC_XXX);
 		wp += offset;
-		wp = b64_encode(wp, get_buffer_data(data_transfer.buffer_index) + data_transfer.bytes_transferred, n);
+		const int buffer_index = data_transfer.buffer_index;
+		wp = b64_encode(wp, get_buffer_data(buffer_index) + data_transfer.bytes_transferred, n);
 		*(wp++) = '\n';
 		*(wp++) = 0;
 		puts(line);
 		data_transfer.bytes_transferred += n;
 		if (data_transfer.bytes_transferred == data_transfer.bytes_total) {
 			data_transfer.is_transfering = 0;
+			release_buffer(buffer_index);
+			printf("%s %d, %d\n", CPPP_DATA_FOOTER, data_transfer.sequence, /*FIXME checksum?*/0);
 			break;
 		} else if (data_transfer.bytes_transferred > data_transfer.bytes_total) {
 			PANIC(PANIC_XXX);
@@ -198,6 +201,22 @@ static void parse(void)
 		int fail = command_parser.arguments[0].u;
 		xop_blink_test(fail);
 		is_job_polling = 1;
+	} break;
+	case COMMAND_op_xfer_test: {
+		if (!can_allocate_buffer()) {
+			printf(CPPP_ERROR "no buffer available\n");
+		} else {
+			unsigned size = command_parser.arguments[0].u;
+			const unsigned buffer_index = allocate_buffer(size);
+			char* s = get_buffer_filename(buffer_index);
+			snprintf(s, CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH, "i%d-%db.garbage", buffer_index, size);
+			size = get_buffer_size(buffer_index); // may be truncated
+			uint8_t* p = get_buffer_data(buffer_index);
+			for (unsigned i = 0; i < size; i++) {
+				*(p++) = (i & 0xff) + ((i >> 8) & 0xff) + ((i >> 16) & 0xff) + ((i >> 24) & 0xff);
+			}
+			wrote_buffer(buffer_index);
+		}
 	} break;
 	case COMMAND_op_raw_tag: {
 		const unsigned tag      = command_parser.arguments[0].u;
