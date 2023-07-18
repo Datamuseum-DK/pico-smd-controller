@@ -7,7 +7,7 @@ https://bitsavers.org/pdf/cdc/discs/smd/83322200M_CDC_BK4XX_BK5XX_Hardware_Refer
 
 ## Pin config
  - https://htmlpreview.github.io/?https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/doc/pin_config.html
- - https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/config.h
+ - https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/pin_config.h
 
 
 ## Building
