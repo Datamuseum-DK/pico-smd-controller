@@ -111,6 +111,7 @@ int command_parser_put_char(struct command_parser* parser, int ch)
 #ifdef UNIT_TEST
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 
 struct command_parser command_parser;
@@ -155,6 +156,7 @@ int main(int argc, char** argv)
 	assert(command_parser.arguments[0].i == -42);
 	assert(command_parser.arguments[1].i == 66);
 	printf("OK\n");
+	return EXIT_SUCCESS;
 }
 
 void PANIC(uint32_t error)

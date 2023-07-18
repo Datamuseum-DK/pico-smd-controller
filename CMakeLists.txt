@@ -13,6 +13,7 @@ add_executable(${PROJECT_NAME}
 	clocked_read.c
 	xop.c
 	command_parser.c
+	b64.c
 	base.c
 )
 

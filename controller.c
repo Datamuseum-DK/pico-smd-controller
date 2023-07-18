@@ -12,6 +12,7 @@
 #include "clocked_read.h"
 #include "controller_protocol.h"
 #include "xop.h"
+#include "b64.h"
 #include "dbgclk.pio.h"
 
 unsigned stdin_received_bytes;
@@ -72,14 +73,9 @@ struct {
 	int is_transfering;
 	unsigned buffer_index;
 	unsigned bytes_transferred;
+	unsigned bytes_total;
 	unsigned sequence;
 } data_transfer;
-
-static inline char get_base64_digit(unsigned v)
-{
-	if (v >= 64) PANIC(PANIC_XXX);
-	return (BASE64_DIGITS)[v];
-}
 
 static void handle_frontend_data_transfers(void)
 {
@@ -93,40 +89,32 @@ static void handle_frontend_data_transfers(void)
 		data_transfer.is_transfering = 1;
 		data_transfer.buffer_index = buffer_index;
 		data_transfer.bytes_transferred = 0;
-		printf("%s %d %s\n", CPPP_DATA_HEADER, get_buffer_size(buffer_index), get_buffer_filename(buffer_index));
+		data_transfer.bytes_total = get_buffer_size(buffer_index);
+		printf("%s %d %s\n", CPPP_DATA_HEADER, data_transfer.bytes_total, get_buffer_filename(buffer_index));
 	}
 
 	if (!data_transfer.is_transfering) PANIC(PANIC_XXX);
-	int chunk_lines_remaining = DATA_TRANSFER_LINES_PER_CHUNK;
-	while (chunk_lines_remaining > 0) {
-		uint8_t* buffer_begin = get_buffer_data(data_transfer.buffer_index);
-		uint8_t* buffer_end = buffer_begin + get_buffer_size(data_transfer.buffer_index);
-		uint8_t* window_begin = buffer_begin + data_transfer.bytes_transferred;
-		uint8_t* window_end = window_begin + DATA_TRANSFER_BYTES_PER_LINE;
+	for (int i = 0; i < DATA_TRANSFER_LINES_PER_CHUNK && data_transfer.is_transfering; i++) {
+		const int remaining = data_transfer.bytes_total - data_transfer.bytes_transferred;
+		const int n = remaining > DATA_TRANSFER_BYTES_PER_LINE ? DATA_TRANSFER_BYTES_PER_LINE : remaining;
+
 		char line[DATA_TRANSFER_CHARACTERS_PER_LINE+20];
-		if (window_end <= buffer_end) {
-			int offset = snprintf(line, sizeof line, "%s %.05d ", CPPP_DATA_LINE, data_transfer.sequence);
-			uint8_t* rp = window_begin;
-			char* wp = line + offset;
-			for (unsigned i0 = 0; i0 < DATA_TRANSFER_BYTES_PER_LINE; i0 += 3) {
-				uint8_t b0 = *(rp)++;
-				uint8_t b1 = *(rp)++;
-				uint8_t b2 = *(rp)++;
-				*(wp++) = get_base64_digit(b0 & 0x3f);                             // 000000
-				*(wp++) = get_base64_digit(((b0 >> 6) & 0x3) | ((b1 & 0xf) << 2)); // 001111
-				*(wp++) = get_base64_digit(((b1 >> 4) & 0xf) | ((b2 & 0x3) << 4)); // 111122
-				*(wp++) = get_base64_digit(b2 >> 2);                               // 222222
-			}
-		} else {
-			//window_end = buffer_end;
-		}
+		char* wp = line;
+		int offset = snprintf(line, sizeof line, "%s %.05d ", CPPP_DATA_LINE, data_transfer.sequence++);
+		if (offset <= 0) PANIC(PANIC_XXX);
+		wp += offset;
+		wp = b64_enc(wp, get_buffer_data(data_transfer.buffer_index) + data_transfer.bytes_transferred, n);
+		*(wp++) = '\n';
+		*(wp++) = 0;
 		puts(line);
-		data_transfer.sequence++;
+		data_transfer.bytes_transferred += n;
+		if (data_transfer.bytes_transferred == data_transfer.bytes_total) {
+			data_transfer.is_transfering = 0;
+			break;
+		} else if (data_transfer.bytes_transferred > data_transfer.bytes_total) {
+			PANIC(PANIC_XXX);
+		}
 	}
-
-
-	// XXX TODO transfer buffer; base64 encoded probably? not
-	// everything in one go; have some define that limits transfers
 }
 
 static void handle_job_status(void)
