@@ -4,11 +4,11 @@ Drive running on a Raspberry Pi Pico (RP2040).
 
 ## Hardware
 Pico pin config:
- - https://htmlpreview.github.io/?https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/doc/pin_config.html
- - https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/pin_config.h
+ - [`pin_config.html`](https://htmlpreview.github.io/?https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/doc/pin_config.html)
+ - [`pin_config.h`](pin_config.h)
 
 Drive documentation:
- - https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/doc/references/General%20Description%20-%20Operation%20-%20Theory%20of%20Operation%20-%20Discrete%20Component%20Circuits%20-%208332200%20-%20BK4xx%20-%20BK5xx%20-%209760%20-%209762.pdf
+ - [General Description - Operation - Theory of Operation - Discrete Component Circuits - 8332200 - BK4xx - BK5xx - 9760 - 9762.pdf](doc/references/General%20Description%20-%20Operation%20-%20Theory%20of%20Operation%20-%20Discrete%20Component%20Circuits%20-%208332200%20-%20BK4xx%20-%20BK5xx%20-%209760%20-%209762.pdf)
 
 Drive signals are balanced (both inputs and outputs) and need differential line receivers/drivers between the Pico pins and the drive. (TODO schematics/parts list)
 
