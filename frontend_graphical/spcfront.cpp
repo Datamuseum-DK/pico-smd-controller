@@ -603,7 +603,7 @@ int main(int argc, char** argv)
 	uint32_t last_poll_gpio = 0;
 
 	const int font_size = 18;
-	ImFont* font = io.Fonts->AddFontFromFileTTF("Cousine-Regular.ttf", font_size);
+	ImFont* font = io.Fonts->AddFontFromFileTTF("Inconsolata-Medium.ttf", font_size);
 	io.Fonts->Build();
 
 	int exiting = 0;

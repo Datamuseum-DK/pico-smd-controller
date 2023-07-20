@@ -23,3 +23,9 @@ Run `make` in `frontend_graphical/` directory. Requirements: `termios.h`, SDL2, 
 ## Running
  - If the Pico runs the controller code it will flash the LED briefly on startup, and it should announce itself as a TTY-over-USB device (typically `/dev/ttyACM0` on Linux)
  - Run the "frontend"; pass the path to the TTY as argument (it can't run without a Pico, but you can test a lot of functionality without a drive).
+
+## License/Credit
+ - Dear ImGui (`frontend_graphical/im_*`)[frontend_graphical/] is (MIT licensed by Omar Cornut)[LICENSE.imgui].
+ - (`frontend_graphical/stb_ds.h` by Sean Barrett is MIT/unlicensed)[frontend_graphical/stb_ds.h].
+ - (`frontend_graphical/Inconsolata-Medium.ttf`)[frontend_graphical/Inconsolata-Medium.ttf] by The Inconsolata Project Authors is (OFL licensed)[LICENSE.Inconsolata]
+ - The rest by me is (unlicensed([LICENSE.spc] though I may have peeked at the (Pico Examples)[https://github.com/raspberrypi/pico-examples].
