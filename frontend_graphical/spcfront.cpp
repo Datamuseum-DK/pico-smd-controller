@@ -872,7 +872,8 @@ int main(int argc, char** argv)
 				if (ImGui::Button("Execute Blink Test Job (Succeed)")) {
 					com_enqueue("op_blink_test 0");
 				}
-				if (ImGui::Button("Execute Blink Test Job (Fail)")) {
+				ImGui::SameLine();
+				if (ImGui::Button("(Fail)")) {
 					com_enqueue("op_blink_test 1");
 				}
 				ImGui::Checkbox("Poll all GPIO (see log output)", &poll_gpio);
