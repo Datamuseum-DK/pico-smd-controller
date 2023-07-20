@@ -235,6 +235,9 @@ static void read_data_normal(unsigned buffer_index, unsigned n_32bit_words)
 static inline void reset(void)
 {
 	multicore_reset_core1(); // waits until core1 is down
+	sleep_us(1);
+	set_tag(TAG_CLEAR);
+	set_bits(0);
 }
 
 static void run(void(*fn)(void))

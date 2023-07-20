@@ -702,6 +702,39 @@ int main(int argc, char** argv)
 		{ // controller control
 			ImGui::Begin("Controller Control");
 
+			if (ImGui::CollapsingHeader("Batch Read")) {
+				if (ImGui::InputInt("First cylinder", &batch_cylinder0)) {
+					if (batch_cylinder0 < 0) batch_cylinder0 = 0;
+					if (batch_cylinder0 >= DRIVE_CYLINDER_COUNT) batch_cylinder0 = DRIVE_CYLINDER_COUNT-1;
+					if (batch_cylinder0 > batch_cylinder1) batch_cylinder1 = batch_cylinder0;
+				}
+				if (ImGui::InputInt("Last cylinder (inclusive)", &batch_cylinder1)) {
+					if (batch_cylinder1 < 0) batch_cylinder1 = 0;
+					if (batch_cylinder1 >= DRIVE_CYLINDER_COUNT) batch_cylinder1 = DRIVE_CYLINDER_COUNT-1;
+					if (batch_cylinder1 < batch_cylinder0) batch_cylinder0 = batch_cylinder1;
+				}
+				ImGui::CheckboxFlags("Head 0", &batch_head_set, 1<<0);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 1", &batch_head_set, 1<<1);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 2", &batch_head_set, 1<<2);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 3", &batch_head_set, 1<<3);
+				ImGui::SameLine();
+				ImGui::CheckboxFlags("Head 4", &batch_head_set, 1<<4);
+				ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
+				if (common_32bit_word_count < 0) common_32bit_word_count = 0;
+				if (ImGui::Button("Execute!")) {
+					com_enqueue("op_read_batch %d %d %d %d %d %d",
+						batch_cylinder0,
+						batch_cylinder1,
+						batch_head_set,
+						common_32bit_word_count,
+						common_servo_offset,
+						common_data_strobe_delay);
+				}
+			}
+
 			if (ImGui::CollapsingHeader("Basic Operation")) {
 				const char* items[] = {
 					"Select Unit 0",
@@ -764,39 +797,6 @@ int main(int argc, char** argv)
 				}
 			}
 
-			if (ImGui::CollapsingHeader("Batch Read")) {
-				if (ImGui::InputInt("First cylinder", &batch_cylinder0)) {
-					if (batch_cylinder0 < 0) batch_cylinder0 = 0;
-					if (batch_cylinder0 >= DRIVE_CYLINDER_COUNT) batch_cylinder0 = DRIVE_CYLINDER_COUNT-1;
-					if (batch_cylinder0 > batch_cylinder1) batch_cylinder1 = batch_cylinder0;
-				}
-				if (ImGui::InputInt("Last cylinder (inclusive)", &batch_cylinder1)) {
-					if (batch_cylinder1 < 0) batch_cylinder1 = 0;
-					if (batch_cylinder1 >= DRIVE_CYLINDER_COUNT) batch_cylinder1 = DRIVE_CYLINDER_COUNT-1;
-					if (batch_cylinder1 < batch_cylinder0) batch_cylinder0 = batch_cylinder1;
-				}
-				ImGui::CheckboxFlags("Head 0", &batch_head_set, 1<<0);
-				ImGui::SameLine();
-				ImGui::CheckboxFlags("Head 1", &batch_head_set, 1<<1);
-				ImGui::SameLine();
-				ImGui::CheckboxFlags("Head 2", &batch_head_set, 1<<2);
-				ImGui::SameLine();
-				ImGui::CheckboxFlags("Head 3", &batch_head_set, 1<<3);
-				ImGui::SameLine();
-				ImGui::CheckboxFlags("Head 4", &batch_head_set, 1<<4);
-				ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
-				if (common_32bit_word_count < 0) common_32bit_word_count = 0;
-				if (ImGui::Button("Execute!")) {
-					com_enqueue("op_read_batch %d %d %d %d %d %d",
-						batch_cylinder0,
-						batch_cylinder1,
-						batch_head_set,
-						common_32bit_word_count,
-						common_servo_offset,
-						common_data_strobe_delay);
-				}
-			}
-
 			if (ImGui::CollapsingHeader("Raw Tag")) {
 				const char* items[] = {
 					// same order as `enum tag`
@@ -806,6 +806,7 @@ int main(int argc, char** argv)
 					"TAG3 (Control)",
 				};
 				ImGui::Combo("##selected_raw_tag", &raw_tag_selected_index, items, IM_ARRAYSIZE(items));
+				const int MAX_ADDR = (1<<10)-1;
 				switch (raw_tag_selected_index) {
 				case TAG_UNIT_SELECT: {
 					ImGui::Text("(always selects unit 0)");
@@ -813,12 +814,12 @@ int main(int argc, char** argv)
 				case TAG1: {
 					ImGui::InputInt("Cylinder", &raw_tag1_cylinder);
 					if (raw_tag1_cylinder < 0) raw_tag1_cylinder = 0;
-					if (raw_tag1_cylinder >= DRIVE_CYLINDER_COUNT) raw_tag1_cylinder = DRIVE_CYLINDER_COUNT-1;
+					if (raw_tag1_cylinder > MAX_ADDR) raw_tag1_cylinder = MAX_ADDR;
 				} break;
 				case TAG2: {
 					ImGui::InputInt("Head", &raw_tag2_head);
 					if (raw_tag2_head < 0) raw_tag2_head = 0;
-					if (raw_tag2_head >= DRIVE_HEAD_COUNT) raw_tag2_head = DRIVE_HEAD_COUNT-1;
+					if (raw_tag2_head > MAX_ADDR) raw_tag2_head = MAX_ADDR;
 				} break;
 				case TAG3: {
 					#define BIT(NAME,DESC) \
@@ -840,7 +841,7 @@ int main(int argc, char** argv)
 				}
 			}
 
-			if (ImGui::CollapsingHeader("Control Pin Debugging")) {
+			if (ImGui::CollapsingHeader("Control Pins Manual ON/OFF")) {
 				{
 					int mask = 1;
 					#define CONTROL(NAME,SUPPORTED) \
@@ -879,7 +880,7 @@ int main(int argc, char** argv)
 					com_enqueue("xfer_test 1000");
 				}
 				ImGui::SameLine();
-				if (ImGui::Button("Execute Data Download Test (10000b)")) {
+				if (ImGui::Button("(10000b)")) {
 					com_enqueue("xfer_test 10000");
 				}
 			}
@@ -890,33 +891,35 @@ int main(int argc, char** argv)
 					if (ImGui::Button("TERMINATE OPERATION")) {
 						com_enqueue("terminate_op");
 					}
+					ImGui::SetItemTooltip("Terminates current drive operation on Pico and sets all control pins to zero");
 					pop_danger_style();
 				}
 
 				if (ImGui::Button("RTZ")) {
 					com_enqueue("op_rtz");
 				}
+				ImGui::SetItemTooltip("Return to cylinder zero, clear fault");
 
-				if (ImGui::Button("Clear Fault")) {
+				if (ImGui::Button("Clear FAULT")) {
 					com_enqueue("op_raw_tag 3 %d", TAG3BIT_FAULT_CLEAR);
 				}
 
-				if (ImGui::Button("Clear Control")) {
+				if (ImGui::Button("Clear Control (TAG3 with all zeroes)")) {
 					com_enqueue("op_raw_tag 3 0");
 				}
 			}
 
-			if (ImGui::CollapsingHeader("Common")) {
-				ImGui::TextWrapped("These affect all read operations (except \"Raw Tag\" operations)");
+			if (ImGui::CollapsingHeader("TAG3/READ_GATE modifiers")) {
+				ImGui::TextWrapped("Normal read operations begin by strobing TAG3 with READ_GATE=1; the following translates into modifier bits (see \"Raw Tag\") during the strobe:");
 				ImGui::SeparatorText("Servo Offset");
 				ImGui::InputInt("##servo_offset", &common_servo_offset);
-				ImGui::TextWrapped("\"Offsets the actuator from the nominal on cylinder position toward/away from the spindle.\". +1 is towards, -1 is away");
+				ImGui::TextWrapped("\"Offsets the actuator from the nominal on cylinder position toward/away from the spindle.\". +1 is towards (SERVO_OFFSET_POSITIVE), -1 is away (SERVO_OFFSET_NEGATIVE)");
 				if (common_servo_offset < -1) common_servo_offset = -1;
 				if (common_servo_offset > 1) common_servo_offset = 1;
 
 				ImGui::SeparatorText("Data Strobe Delay");
 				ImGui::InputInt("##data_strobe_delay", &common_data_strobe_delay);
-				ImGui::TextWrapped("\"Enables the PLO data separator to strobe the data at a time earlier/later than optimum.\". -1 is earlier, 1 is later");
+				ImGui::TextWrapped("\"Enables the PLO data separator to strobe the data at a time earlier/later than optimum.\". -1 is earlier (DATA_STROBE_EARLY), 1 is later (DATA_STROBE_LATE)");
 				if (common_data_strobe_delay < -1) common_data_strobe_delay = -1;
 				if (common_data_strobe_delay > 1) common_data_strobe_delay = 1;
 			}
