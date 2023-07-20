@@ -10,7 +10,11 @@
 #define DRIVE_RPM                 (3600)
 #define DRIVE_RPS                 (DRIVE_RPM/60)
 
-#define DRIVE_CYLINDER_COUNT      (1024)
+#if 1
+#define DRIVE_CYLINDER_COUNT      (823) // CDC 9762
+#else
+#define DRIVE_CYLINDER_COUNT      (411) // CDC 9760
+#endif
 #define DRIVE_HEAD_COUNT          (5)
 
 #define DRIVE_H

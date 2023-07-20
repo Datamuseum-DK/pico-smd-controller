@@ -589,6 +589,7 @@ int main(int argc, char** argv)
 	int raw_tag3_flags = 0;
 	int basic_selected_index = 0;
 	int basic_cylinder = 0;
+	bool basic_cylinder_allow_overflow = false;
 	int basic_head = 0;
 	bool basic_index_sync = true;
 	bool basic_skip_checks = false;
@@ -716,8 +717,10 @@ int main(int argc, char** argv)
 				} break;
 				case 1: {
 					ImGui::InputInt("Cylinder", &basic_cylinder);
+					ImGui::Checkbox("Allow overflow (full 10-bit range)", &basic_cylinder_allow_overflow);
 					if (basic_cylinder < 0) basic_cylinder = 0;
-					if (basic_cylinder >= DRIVE_CYLINDER_COUNT) basic_cylinder = DRIVE_CYLINDER_COUNT-1;
+					const int max_cylinder = (basic_cylinder_allow_overflow ? (1<<10) : DRIVE_CYLINDER_COUNT) - 1;
+					if (basic_cylinder > max_cylinder) basic_cylinder = max_cylinder;
 				} break;
 				case 2: {
 					ImGui::InputInt("Head", &basic_head);
