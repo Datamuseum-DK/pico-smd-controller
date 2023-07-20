@@ -12,7 +12,7 @@
 #include "clocked_read.h"
 #include "controller_protocol.h"
 #include "xop.h"
-#include "b64.h"
+#include "base64.h"
 #include "adler32.h"
 #include "dbgclk.pio.h"
 
@@ -110,7 +110,7 @@ static void handle_frontend_data_transfers(void)
 
 		uint8_t* data = get_buffer_data(buffer_index) + data_transfer.bytes_transferred;
 		adler32_push(&data_transfer.adler, data, n);
-		wp = b64_encode(wp, data, n);
+		wp = base64_encode(wp, data, n);
 		*(wp++) = '\n';
 		*(wp++) = 0;
 		puts(line);

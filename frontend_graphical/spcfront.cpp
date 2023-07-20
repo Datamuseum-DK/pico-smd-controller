@@ -31,9 +31,9 @@ EMIT_COMMANDS
 #undef COMMAND
 
 #include "drive.h"
-#include "b64.h"
+#include "base64.h"
 void PANIC(uint32_t error) { fprintf(stderr, "PANIC(%d)\n", error); abort(); } // heh
-#include "b64.c" // eheheh
+#include "base64.c" // eheheh
 #include "adler32.h"
 #include "adler32.c" // ;-)
 
@@ -261,7 +261,7 @@ static void com__handle_msg(char* msg)
 				} else {
 					comfile->sequence++;
 					uint8_t buffer[1<<10];
-					uint8_t* eb = b64_decode_line(buffer, b64);
+					uint8_t* eb = base64_decode_line(buffer, b64);
 					if (eb == NULL) {
 						com_printf("ERROR: could not decode data line [%s]", msg);
 						end_com_file();

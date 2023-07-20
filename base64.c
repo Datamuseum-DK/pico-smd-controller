@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
 #include "base.h"
-#include "b64.h"
+#include "base64.h"
 
 #define BASE64_DIGITS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 //                     0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
@@ -12,7 +12,7 @@ static inline char encode_base64_digit(unsigned v)
 	return (BASE64_DIGITS)[v];
 }
 
-char* b64_encode(char* output, uint8_t* input, int n_bytes)
+char* base64_encode(char* output, uint8_t* input, int n_bytes)
 {
 	uint8_t* rp = input;
 	char* wp = output;
@@ -65,7 +65,7 @@ static inline int decode_base64_digit(char digit)
 	return -1;
 }
 
-uint8_t* b64_decode_line(uint8_t* output, char* line)
+uint8_t* base64_decode_line(uint8_t* output, char* line)
 {
 	char* rp = line;
 	uint8_t* wp = output;
@@ -116,7 +116,7 @@ uint8_t* b64_decode_line(uint8_t* output, char* line)
 }
 
 // -----------------------------------------------------------------------------------------
-// cc -DUNIT_TEST b64.c -o unittest_b64 && ./unittest_b64
+// cc -DUNIT_TEST base64.c -o unittest_base64 && ./unittest_base64
 #ifdef UNIT_TEST
 
 #include <stdlib.h>
@@ -126,7 +126,7 @@ uint8_t* b64_decode_line(uint8_t* output, char* line)
 
 void enc(char* output, uint8_t* input, int n_bytes)
 {
-	char* w = b64_encode(output, input, n_bytes);
+	char* w = base64_encode(output, input, n_bytes);
 	*(w++) = 0;
 	#if 0
 	printf("enc -> [%s]\n", output);
@@ -135,8 +135,8 @@ void enc(char* output, uint8_t* input, int n_bytes)
 
 int dec(uint8_t* output, char* input)
 {
-	uint8_t* p = b64_decode_line(output, input);
-	assert((p != NULL) && "b64_decode_line() failed");
+	uint8_t* p = base64_decode_line(output, input);
+	assert((p != NULL) && "base64_decode_line() failed");
 	const int n = p - output;
 	#if 0
 	printf("dec -> [");
