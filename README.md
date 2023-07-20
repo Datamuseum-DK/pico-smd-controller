@@ -1,4 +1,4 @@
-Attempt to write a read-only disk controller for a CDC 9762 Storage Module
+Attempt to write a read-only disk controller for a CDC 9762(/9760) Storage Module
 Drive running on a Raspberry Pi Pico (RP2040).
 
 
