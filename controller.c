@@ -13,6 +13,7 @@
 #include "controller_protocol.h"
 #include "xop.h"
 #include "b64.h"
+#include "adler32.h"
 #include "dbgclk.pio.h"
 
 unsigned stdin_received_bytes;
@@ -75,6 +76,7 @@ struct {
 	unsigned bytes_transferred;
 	unsigned bytes_total;
 	unsigned sequence;
+	struct adler32 adler;
 } data_transfer;
 
 static void handle_frontend_data_transfers(void)
@@ -91,6 +93,7 @@ static void handle_frontend_data_transfers(void)
 		data_transfer.buffer_index = buffer_index;
 		data_transfer.bytes_total = get_buffer_size(buffer_index);
 		printf("%s %d %s\n", CPPP_DATA_HEADER, data_transfer.bytes_total, get_buffer_filename(buffer_index));
+		adler32_init(&data_transfer.adler);
 	}
 
 	if (!data_transfer.is_transfering) PANIC(PANIC_XXX);
@@ -104,7 +107,10 @@ static void handle_frontend_data_transfers(void)
 		if (offset <= 0) PANIC(PANIC_XXX);
 		wp += offset;
 		const int buffer_index = data_transfer.buffer_index;
-		wp = b64_encode(wp, get_buffer_data(buffer_index) + data_transfer.bytes_transferred, n);
+
+		uint8_t* data = get_buffer_data(buffer_index) + data_transfer.bytes_transferred;
+		adler32_push(&data_transfer.adler, data, n);
+		wp = b64_encode(wp, data, n);
 		*(wp++) = '\n';
 		*(wp++) = 0;
 		puts(line);
@@ -112,7 +118,8 @@ static void handle_frontend_data_transfers(void)
 		if (data_transfer.bytes_transferred == data_transfer.bytes_total) {
 			data_transfer.is_transfering = 0;
 			release_buffer(buffer_index);
-			printf("%s %.05d %d\n", CPPP_DATA_FOOTER, data_transfer.sequence, /*FIXME checksum?*/0);
+			uint32_t checksum = adler32_sum(&data_transfer.adler);
+			printf("%s %.05d %lu\n", CPPP_DATA_FOOTER, data_transfer.sequence, checksum);
 			break;
 		} else if (data_transfer.bytes_transferred > data_transfer.bytes_total) {
 			PANIC(PANIC_XXX);

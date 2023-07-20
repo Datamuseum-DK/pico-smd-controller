@@ -14,6 +14,7 @@ add_executable(${PROJECT_NAME}
 	xop.c
 	command_parser.c
 	b64.c
+	adler32.c
 	base.c
 )
 

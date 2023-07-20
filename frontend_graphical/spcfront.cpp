@@ -34,6 +34,8 @@ EMIT_COMMANDS
 #include "b64.h"
 void PANIC(uint32_t error) { fprintf(stderr, "PANIC(%d)\n", error); abort(); } // heh
 #include "b64.c" // eheheh
+#include "adler32.h"
+#include "adler32.c" // ;-)
 
 struct cond {
 	int value;
@@ -79,6 +81,7 @@ struct com_file {
 	int sequence;
 	size_t bytes_written;
 	size_t bytes_total;
+	struct adler32 adler;
 };
 
 struct com {
@@ -146,7 +149,7 @@ static void com_printf(const char* fmt, ...)
 
 static void bad_msg(char* msg)
 {
-	com_printf("WARNING: garbage message from controller: [%s]\n", msg);
+	com_printf("WARNING: garbage message from controller: [%s]", msg);
 }
 
 static void com__handle_msg(char* msg)
@@ -236,7 +239,8 @@ static void com__handle_msg(char* msg)
 				comfile->in_use = 1;
 				comfile->fd = fd;
 				comfile->bytes_total = n_bytes;
-				com_printf("D/L %d bytes [%s]...\n", n_bytes, path);
+				adler32_init(&comfile->adler);
+				com_printf("D/L %d bytes [%s]...", n_bytes, path);
 				break;
 			}
 		} else {
@@ -244,14 +248,14 @@ static void com__handle_msg(char* msg)
 		}
 	} else if (is_payload(msg, CPPP_DATA_LINE)) {
 		if (!comfile->in_use) {
-			com_printf("WARNING: out of sequence (not-in-use) data line [%s]\n", msg);
+			com_printf("ERROR: out of sequence (not-in-use) data line [%s]", msg);
 		} else {
 			char* p = msg + strlen(CPPP_DATA_LINE);
 			int sequence = -1;
 			char b64[1<<10];
 			if (sscanf(p, " %d %s", &sequence, b64) == 2) {
 				if (sequence != comfile->sequence) {
-					com_printf("WARNING: out of sequence (expected %d, got %d) data line [%s]\n", comfile->sequence, sequence, msg);
+					com_printf("ERROR: out of sequence (expected %d, got %d) data line [%s]", comfile->sequence, sequence, msg);
 					end_com_file();
 					return;
 				} else {
@@ -259,11 +263,14 @@ static void com__handle_msg(char* msg)
 					uint8_t buffer[1<<10];
 					uint8_t* eb = b64_decode_line(buffer, b64);
 					if (eb == NULL) {
-						com_printf("WARNING: could not decode data line [%s]\n", msg);
+						com_printf("ERROR: could not decode data line [%s]", msg);
 						end_com_file();
 						return;
 					} else {
-						size_t remaining = eb - buffer;
+						const size_t n_recv = eb - buffer;
+						adler32_push(&comfile->adler, buffer, n_recv);
+						comfile->bytes_written += n_recv;
+						size_t remaining = n_recv;
 						uint8_t* tp = buffer;
 						while (remaining > 0) {
 							ssize_t nw = write(comfile->fd, tp, remaining);
@@ -287,13 +294,24 @@ static void com__handle_msg(char* msg)
 	} else if (is_payload(msg, CPPP_DATA_FOOTER)) {
 		char* p = msg + strlen(CPPP_DATA_FOOTER);
 		if (!comfile->in_use) {
-			com_printf("WARNING: out of sequence (not-in-use) footer [%s]\n", msg);
+			com_printf("WARNING: out of sequence (not-in-use) footer [%s]", msg);
 		} else {
 			int sequence = -1;
-			int TODO_checksum = -1;
-			if (sscanf(p, " %d %d", &sequence, &TODO_checksum) == 2) {
+			uint32_t pico_checksum = 0;
+			if (sscanf(p, " %d %u", &sequence, &pico_checksum) == 2) {
+				const uint32_t our_checksum = adler32_sum(&comfile->adler);
+				if (comfile->bytes_written != comfile->bytes_total) {
+					com_printf("ERROR: expected %zd bytes; only received %zd", comfile->bytes_total, comfile->bytes_written);
+					end_com_file();
+					return;
+				}
+				if (our_checksum != pico_checksum) {
+					com_printf("ERROR: bad checksum; pico says %u; our calc says %u", pico_checksum, our_checksum);
+					end_com_file();
+					return;
+				}
 				if (sequence != comfile->sequence) {
-					com_printf("WARNING: out of sequence (expected %d, got %d) footer [%s]\n", comfile->sequence, sequence, msg);
+					com_printf("ERROR: out of sequence (expected %d, got %d) footer [%s]", comfile->sequence, sequence, msg);
 					end_com_file();
 					return;
 				}
