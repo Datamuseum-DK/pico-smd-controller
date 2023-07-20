@@ -411,7 +411,9 @@ void xop_read_enable(int servo_offset, int data_strobe_delay)
 unsigned next_read_data_serial = 1;
 void job_read_data(void)
 {
-	select_unit0_if_not_selected();
+	if (!job_args.read_data.skip_checks) {
+		select_unit0_if_not_selected();
+	}
 	const unsigned buffer_index = job_args.read_data.buffer_index;
 	snprintf(
 		get_buffer_filename(buffer_index),
@@ -428,7 +430,7 @@ void job_read_data(void)
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
 	reset();
-	const unsigned buffer_index = allocate_buffer(4*n_32bit_words);
+	const unsigned buffer_index = allocate_buffer(n_32bit_words << 2);
 	job_args.read_data.buffer_index = buffer_index;
 	job_args.read_data.n_32bit_words = n_32bit_words;
 	job_args.read_data.index_sync = index_sync;

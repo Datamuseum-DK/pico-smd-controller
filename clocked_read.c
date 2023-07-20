@@ -89,7 +89,7 @@ unsigned can_allocate_buffer(void)
 
 unsigned allocate_buffer(unsigned size)
 {
-	int i = get_next_free_buffer_index();
+	const int i = get_next_free_buffer_index();
 	if (i < 0) PANIC(PANIC_ALLOCATION_ERROR);
 	check_buffer_index(i);
 	read_buffer_status[i] = BUSY;
