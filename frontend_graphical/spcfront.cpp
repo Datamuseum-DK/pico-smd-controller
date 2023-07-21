@@ -539,8 +539,8 @@ static void pop_danger_style(void)
 
 int main(int argc, char** argv)
 {
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s </path/to/tty/for/smd-pico-controller>\n", argv[0]);
+	if (argc != 2 && argc != 3) {
+		fprintf(stderr, "Usage: %s </path/to/tty/for/smd-pico-controller> [font size px]\n", argv[0]);
 		fprintf(stderr, "Try `/dev/ttyACM0`, or run `dmesg` or `ls -ltr /dev/` to see/guess what tty is assigned to the device\n");
 		exit(EXIT_FAILURE);
 	}
@@ -602,7 +602,14 @@ int main(int argc, char** argv)
 	bool poll_gpio = false;
 	uint32_t last_poll_gpio = 0;
 
-	const int font_size = 18;
+	int font_size = 18;
+	if (argc == 3) {
+		font_size = atoi(argv[2]);
+		if (font_size < 1) {
+			fprintf(stderr, "invalid font size [%s]\n", argv[2]);
+			exit(EXIT_FAILURE);
+		}
+	}
 	ImFont* font = io.Fonts->AddFontFromFileTTF("Inconsolata-Medium.ttf", font_size);
 	io.Fonts->Build();
 
