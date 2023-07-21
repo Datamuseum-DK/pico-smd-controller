@@ -749,14 +749,14 @@ int main(int argc, char** argv)
 					// nothing
 				} break;
 				case 1: {
-					ImGui::InputInt("Cylinder", &basic_cylinder);
+					ImGui::InputInt("Cylinder##bo", &basic_cylinder);
 					ImGui::Checkbox("Allow overflow (full 10-bit range)", &basic_cylinder_allow_overflow);
 					if (basic_cylinder < 0) basic_cylinder = 0;
 					const int max_cylinder = (basic_cylinder_allow_overflow ? (1<<10) : DRIVE_CYLINDER_COUNT) - 1;
 					if (basic_cylinder > max_cylinder) basic_cylinder = max_cylinder;
 				} break;
 				case 2: {
-					ImGui::InputInt("Head", &basic_head);
+					ImGui::InputInt("Head##bo", &basic_head);
 					if (basic_head < 0) basic_head = 0;
 					if (basic_head >= DRIVE_HEAD_COUNT) basic_head = DRIVE_HEAD_COUNT-1;
 				} break;
@@ -812,12 +812,12 @@ int main(int argc, char** argv)
 					ImGui::Text("(always selects unit 0)");
 				} break;
 				case TAG1: {
-					ImGui::InputInt("Cylinder", &raw_tag1_cylinder);
+					ImGui::InputInt("Cylinder##tag", &raw_tag1_cylinder);
 					if (raw_tag1_cylinder < 0) raw_tag1_cylinder = 0;
 					if (raw_tag1_cylinder > MAX_ADDR) raw_tag1_cylinder = MAX_ADDR;
 				} break;
 				case TAG2: {
-					ImGui::InputInt("Head", &raw_tag2_head);
+					ImGui::InputInt("Head##tag", &raw_tag2_head);
 					if (raw_tag2_head < 0) raw_tag2_head = 0;
 					if (raw_tag2_head > MAX_ADDR) raw_tag2_head = MAX_ADDR;
 				} break;
