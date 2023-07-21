@@ -1,7 +1,10 @@
 // $ make print_pin_config_html && ./print_pin_config_html > doc/pin_config.html
+// or
+// $ make print_pin_config_html && ./print_pin_config_html flip > pin_config_flip.html
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "pin_config.h"
 #include "base.h"
 
@@ -62,11 +65,6 @@ const char* HEADER =
 "	color: #ddd;\n"
 "	background-color: #111;\n"
 "	text-align: center;\n"
-"}\n"
-"\n"
-".gpio {\n"
-"	color: yellow;\n"
-"	font-weight: bold;\n"
 "}\n"
 "\n"
 ".pin {\n"
@@ -186,19 +184,27 @@ static char* get_logic_text(int e)
 
 int main(int argc, char** argv)
 {
-	puts(HEADER);
-	puts("<table>\n");
+	const int flip = argc == 2 && strcmp(argv[1], "flip") == 0;
 
-	int left_pin = 1;
-	int right_pin = 40;
-	for (int index = 0; index < ARRAY_LENGTH(pinout); index += N_COLUMNS, left_pin++, right_pin--) {
-		int left = pinout[index];
-		int right = pinout[index+1];
+	puts(HEADER);
+
+	puts("<table>\n");
+	int left_pin = !flip ? 1 : 21;
+	int right_pin = !flip ? 40 : 20;
+	const int n = ARRAY_LENGTH(pinout);
+	for (int index = 0; index < n; index += N_COLUMNS, left_pin++, right_pin--) {
+		int left  = pinout[ !flip ? index   : n-index-1 ];
+		int right = pinout[ !flip ? index+1 : n-index-2 ];
+		const char* arr = !flip ? "&uarr;" : "&darr;"; // darrgh uarrgh!1
 		printf("<tr>\n");
 		printf("<td class=\"%s rj\">%s</td>\n", get_label_class(left), get_label_text(left));
 		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(left), get_logic_text(left));
 		printf("<td class=\"pin\">%.2d</td>\n", left_pin);
-		printf("<td class=\"mid\">%s</td>\n", left_pin == 1 ? "&uarr;&uarr;USB&uarr;&uarr;" : "");
+		if (left_pin == 1 || right_pin == 1) {
+			printf("<td class=\"mid\">%s%sUSB%s%s</td>\n", arr, arr, arr, arr); // arr arr arr arrr!!!
+		} else {
+			printf("<td class=\"mid\"></td>\n");
+		}
 		printf("<td class=\"pin\">%.2d</td>\n", right_pin);
 		printf("<td class=\"logic %s\">%s</td>\n", get_logic_class(right), get_logic_text(right));
 		printf("<td class=\"%s lj\">%s</td>\n", get_label_class(right), get_label_text(right));
