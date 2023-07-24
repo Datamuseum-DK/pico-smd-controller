@@ -100,6 +100,8 @@ struct com {
 	uint64_t controller_timestamp_us;
 
 	struct com_file file;
+
+	bool log_status_changes = false;
 } com;
 
 static int starts_with(char* s, const char* prefix)
@@ -198,6 +200,9 @@ static void com__handle_msg(char* msg)
 			arrput(com.controller_status_arr, s);
 			if (timestamp_us > com.controller_timestamp_us) {
 				com.controller_timestamp_us = timestamp_us;
+			}
+			if (com.log_status_changes) {
+				com_printf("STAT t=%lu st=%d", s.timestamp_us, s.status);
 			}
 			pthread_rwlock_unlock(&com.rwlock);
 		} else {
@@ -891,6 +896,7 @@ int main(int argc, char** argv)
 				if (ImGui::Button("(10000b)")) {
 					com_enqueue("xfer_test 10000");
 				}
+				ImGui::Checkbox("Log status changes", &com.log_status_changes);
 			}
 
 			if (ImGui::CollapsingHeader("Fire Extinguishers")) {
