@@ -658,7 +658,7 @@ int main(int argc, char** argv)
 						ImVec2 area_sz = ImGui::GetContentRegionAvail();
 						ImDrawList* draw_list = ImGui::GetWindowDrawList();
 						float x_right = area_p0.x+area_sz.x;
-						for (int cursor = ncs-1; cursor >= 0; cursor--) {
+						for (int cursor = ncs-1; cursor >= 0 && draw_list->_VtxCurrentIdx < ((1<<16)-64); cursor--) {
 							const struct controller_status* st = &cs[cursor];
 							const double ts = st->timestamp_us;
 							const double ts1 = now_us;
