@@ -22,6 +22,7 @@ struct command_parser command_parser;
 unsigned current_status;
 absolute_time_t last_status_timestamp;
 int is_job_polling;
+absolute_time_t job_begin_time;
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
@@ -131,13 +132,21 @@ static void handle_job_status(void)
 {
 	if (!is_job_polling) return;
 	enum xop_status st = poll_xop_status();
+	const absolute_time_t duration = get_absolute_time() - job_begin_time;
+
 	if (st == XST_DONE) {
-		printf(CPPP_INFO "Job OK!\n");
+		printf(CPPP_INFO "Job OK! (took %llu microseconds)\n", duration);
 		is_job_polling = 0;
 	} else if (st >= XST_ERR0) {
-		printf(CPPP_INFO "Job FAILED! (error:%d)\n", st);
+		printf(CPPP_INFO "Job FAILED! (error:%d, took %llu microseconds)\n", st, duration);
 		is_job_polling = 0;
 	}
+}
+
+static void job_begin(void)
+{
+	job_begin_time = get_absolute_time();
+	is_job_polling = 1;
 }
 
 static void parse(void)
@@ -222,46 +231,46 @@ static void parse(void)
 	} break;
 	case COMMAND_op_blink_test: {
 		int fail = command_parser.arguments[0].u;
+		job_begin();
 		xop_blink_test(fail);
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_raw_tag: {
 		const unsigned tag      = command_parser.arguments[0].u;
 		const unsigned argument = command_parser.arguments[1].u;
+		job_begin();
 		xop_raw_tag(tag, argument);
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_rtz: {
+		job_begin();
 		xop_rtz();
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_unit0: {
+		job_begin();
 		xop_select_unit0();
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_cylinder: {
+		job_begin();
 		xop_select_cylinder(command_parser.arguments[0].u);
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_select_head: {
+		job_begin();
 		xop_select_head(command_parser.arguments[0].u);
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_enable: {
 		int servo_offset = command_parser.arguments[0].i;
 		int data_strobe_delay = command_parser.arguments[1].i;
+		job_begin();
 		xop_read_enable(servo_offset, data_strobe_delay);
-		is_job_polling = 1;
 	} break;
 	case COMMAND_op_read_data: {
 		if (!can_allocate_buffer()) {
 			printf(CPPP_ERROR "no buffer available\n");
 		} else {
+			job_begin();
 			unsigned buffer_index = xop_read_data(
 				command_parser.arguments[0].u,
 				command_parser.arguments[1].u,
 				command_parser.arguments[2].u);
-			is_job_polling = 1;
 			printf(CPPP_DEBUG "reading into buffer %d\n", buffer_index);
 		}
 	} break;
@@ -272,8 +281,8 @@ static void parse(void)
 		const unsigned n_32bit_words  = command_parser.arguments[3].u;
 		const int servo_offset        = command_parser.arguments[4].i;
 		const int data_strobe_delay   = command_parser.arguments[5].i;
+		job_begin();
 		xop_read_batch(cylinder0, cylinder1, head_set, n_32bit_words, servo_offset, data_strobe_delay);
-		is_job_polling = 1;
 	} break;
 	default: {
 		printf(CPPP_ERROR "unhandled command %s/%d\n",
