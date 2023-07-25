@@ -7,7 +7,7 @@
 
 #define READ_PIO         pio0
 #define READ_DMA_CHANNEL (0)
-uint8_t read_buffer[CLOCKED_READ_BUFFER_COUNT][CLOCKED_READ_BUFFER_SIZE];
+uint8_t read_buffer[CLOCKED_READ_BUFFER_COUNT][MAX_DATA_BUFFER_SIZE];
 unsigned read_buffer_size[CLOCKED_READ_BUFFER_COUNT];
 enum buffer_status read_buffer_status[CLOCKED_READ_BUFFER_COUNT];
 char read_buffer_filename[CLOCKED_READ_BUFFER_COUNT][CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH];
@@ -41,7 +41,7 @@ void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count)
 	channel_config_set_dreq(&dma_channel_cfg, pio_get_dreq(pio, sm, false));
 
 	_Static_assert((CLOCKED_READ_WORD_SIZE_IN_BITS_LOG2-3) >= 0, "sub byte word size?!");
-	const unsigned max_word_32bit_count =  CLOCKED_READ_BUFFER_SIZE >> (CLOCKED_READ_WORD_SIZE_IN_BITS_LOG2-3);
+	const unsigned max_word_32bit_count =  MAX_DATA_BUFFER_SIZE >> (CLOCKED_READ_WORD_SIZE_IN_BITS_LOG2-3);
 	if (word_32bit_count > max_word_32bit_count) {
 		word_32bit_count = max_word_32bit_count;
 	}
@@ -93,7 +93,7 @@ unsigned allocate_buffer(unsigned size)
 	if (i < 0) PANIC(PANIC_ALLOCATION_ERROR);
 	check_buffer_index(i);
 	read_buffer_status[i] = BUSY;
-	if (size > CLOCKED_READ_BUFFER_SIZE) size = CLOCKED_READ_BUFFER_SIZE;
+	if (size > MAX_DATA_BUFFER_SIZE) size = MAX_DATA_BUFFER_SIZE;
 	read_buffer_size[i] = size;
 	return i;
 }

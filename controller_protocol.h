@@ -1,5 +1,7 @@
 #ifndef CONTROLLER_PROTOCOL_H
 
+#include "drive.h"
+
 // BRIEF
 // Commands are in the form "<verb> [arg0] [arg1]...\n". Verbs and argfmt
 // (argument format) are defined by EMIT_COMMANDS below. "argfmt" is a string
@@ -105,6 +107,8 @@ enum tag3bit {
 	EMIT_TAG3_BITS
 	#undef BIT
 };
+
+#define MAX_DATA_BUFFER_SIZE ((3*DRIVE_BYTES_PER_TRACK) + (DRIVE_BYTES_PER_TRACK/20))
 
 #define CONTROLLER_PROTOCOL_H
 #endif

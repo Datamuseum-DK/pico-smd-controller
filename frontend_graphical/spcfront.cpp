@@ -601,7 +601,7 @@ int main(int argc, char** argv)
 	int batch_cylinder0 = 0;
 	int batch_cylinder1 = 822;
 	int batch_head_set = 31;
-	int common_32bit_word_count = ((DRIVE_BYTES_PER_TRACK/4)*31)/10;
+	int common_32bit_word_count = MAX_DATA_BUFFER_SIZE/4;
 	int common_servo_offset = 0;
 	int common_data_strobe_delay = 0;
 	bool poll_gpio = false;
