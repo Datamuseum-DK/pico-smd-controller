@@ -22,7 +22,6 @@ struct command_parser command_parser;
 unsigned current_status;
 absolute_time_t last_status_timestamp;
 int is_job_polling;
-absolute_time_t job_begin_time;
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
@@ -132,20 +131,17 @@ static void handle_job_status(void)
 {
 	if (!is_job_polling) return;
 	enum xop_status st = poll_xop_status();
-	const absolute_time_t duration = get_absolute_time() - job_begin_time;
-
 	if (st == XST_DONE) {
-		printf(CPPP_INFO "Job OK! (took %llu microseconds)\n", duration);
+		printf(CPPP_INFO "Job OK! (took %llu microseconds)\n", xop_duration_us());
 		is_job_polling = 0;
 	} else if (st >= XST_ERR0) {
-		printf(CPPP_INFO "Job FAILED! (error:%d, took %llu microseconds)\n", st, duration);
+		printf(CPPP_INFO "Job FAILED! (error:%d, took %llu microseconds)\n", st, xop_duration_us());
 		is_job_polling = 0;
 	}
 }
 
 static void job_begin(void)
 {
-	job_begin_time = get_absolute_time();
 	is_job_polling = 1;
 }
 

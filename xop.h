@@ -1,5 +1,6 @@
 #ifndef XOP_H // "eXecute drive OPerations".
 
+#include "pico/stdlib.h"
 #include "controller_protocol.h"
 
 enum xop_status {
@@ -13,6 +14,7 @@ enum xop_status {
 };
 
 enum xop_status poll_xop_status(void);
+absolute_time_t xop_duration_us(void);
 void terminate_op(void);
 
 void xop_blink_test(int fail);

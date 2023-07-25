@@ -7,7 +7,6 @@
 // entirely handled by PIO/DMA)
 
 #include <stdio.h>
-#include "pico/stdlib.h"
 #include "pico/multicore.h"
 
 #include "base.h"
@@ -33,6 +32,8 @@
 // operations/pins I'm seeing quotes of 250 ns to 1.0 µs, so 2.0 µs should be
 // abundant?
 
+absolute_time_t job_begin_time_us;
+absolute_time_t job_duration_us;
 volatile enum xop_status status;
 
 static void set_bits(unsigned value)
@@ -71,9 +72,15 @@ static void tag_raw(enum tag tag, unsigned value)
 	set_bits(0);
 }
 
-__attribute__ ((noreturn))
-static void HALT(void)
+static void BEGIN(void)
 {
+	job_begin_time_us = get_absolute_time();
+}
+
+__attribute__ ((noreturn))
+static void job_halt(void)
+{
+	job_duration_us = get_absolute_time() - job_begin_time_us;
 	while (1) {}
 }
 
@@ -81,14 +88,14 @@ __attribute__ ((noreturn))
 static void DONE(void)
 {
 	status = XST_DONE;
-	HALT();
+	job_halt();
 }
 
 __attribute__ ((noreturn))
 static void ERROR(enum xop_status error_code)
 {
 	status = error_code;
-	HALT();
+	job_halt();
 }
 
 static void check_drive_error(void)
@@ -251,6 +258,11 @@ enum xop_status poll_xop_status(void)
 	return status;
 }
 
+absolute_time_t xop_duration_us(void)
+{
+	return job_duration_us;
+}
+
 void terminate_op(void)
 {
 	reset();
@@ -295,6 +307,7 @@ union {
 // blink test //////////////////////
 void job_blink_test(void)
 {
+	BEGIN();
 	for (int i = 0; i < 15; i++) {
 		gpio_put(LED_PIN, 1);
 		sleep_ms(50);
@@ -319,6 +332,7 @@ void xop_blink_test(int fail)
 // raw tag /////////////////////////
 void job_raw_tag(void)
 {
+	BEGIN();
 	tag_raw(job_args.raw_tag.tag, job_args.raw_tag.argument);
 	DONE();
 }
@@ -335,6 +349,7 @@ void xop_raw_tag(enum tag tag, unsigned argument)
 // select unit 0 ///////////////////
 void job_select_unit0(void)
 {
+	BEGIN();
 	select_unit0();
 	DONE();
 }
@@ -349,6 +364,7 @@ void xop_select_unit0(void)
 // rtz / return to track zero ///////////////////////////////////////////////
 void job_rtz(void)
 {
+	BEGIN();
 	select_unit0_if_not_selected();
 	rtz_seek();
 	DONE();
@@ -364,6 +380,7 @@ void xop_rtz(void)
 // select cylinder //////////////////////////////////////////////////////////
 void job_select_cylinder(void)
 {
+	BEGIN();
 	select_unit0_if_not_selected();
 	select_cylinder(job_args.select_cylinder.cylinder);
 	DONE();
@@ -380,6 +397,7 @@ void xop_select_cylinder(unsigned cylinder)
 // select head //////////////////////////////////////////////////////////////
 void job_select_head(void)
 {
+	BEGIN();
 	select_unit0_if_not_selected();
 	select_head(job_args.select_head.head);
 	DONE();
@@ -395,6 +413,7 @@ void xop_select_head(unsigned head)
 // read enable //////////////////////////////////////////////////////////////
 void job_read_enable(void)
 {
+	BEGIN();
 	select_unit0_if_not_selected();
 	read_enable_ex(
 		job_args.read_enable.servo_offset,
@@ -414,6 +433,7 @@ void xop_read_enable(int servo_offset, int data_strobe_delay)
 unsigned next_read_data_serial = 1;
 void job_read_data(void)
 {
+	BEGIN();
 	if (!job_args.read_data.skip_checks) {
 		select_unit0_if_not_selected();
 	}
@@ -447,6 +467,7 @@ unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned ski
 // batch read ///////////////////////////////////////////////////////////////
 void job_batch_read(void)
 {
+	BEGIN();
 	select_unit0_if_not_selected();
 	check_drive_error();
 	const unsigned cylinder0 = job_args.batch_read.cylinder0;
