@@ -71,7 +71,7 @@ static void cond_signal(struct cond* cond)
 }
 
 struct controller_status {
-	uint64_t timestamp_us;
+	int64_t timestamp_us;
 	uint32_t status;
 };
 
@@ -190,9 +190,9 @@ static void com__handle_msg(char* msg)
 		}
 	} else if (is_payload(msg, CPPP_STATUS)) {
 		char* p = msg + strlen(CPPP_STATUS);
-		uint64_t timestamp_us = 0;
+		int64_t timestamp_us = 0;
 		uint32_t status = 0;
-		if (sscanf(p, " %lu %u", &timestamp_us, &status) == 2) {
+		if (sscanf(p, " %ld %u", &timestamp_us, &status) == 2) {
 			struct controller_status s;
 			s.timestamp_us = timestamp_us;
 			s.status = status;
@@ -210,8 +210,8 @@ static void com__handle_msg(char* msg)
 		}
 	} else if (is_payload(msg, CPPP_STATUS_TIME)) {
 		char* p = msg + strlen(CPPP_STATUS_TIME);
-		uint64_t timestamp_us;
-		if (sscanf(p, " %lu", &timestamp_us) == 1) {
+		int64_t timestamp_us;
+		if (sscanf(p, " %ld", &timestamp_us) == 1) {
 			pthread_rwlock_wrlock(&com.rwlock);
 			if (timestamp_us > com.controller_timestamp_us) com.controller_timestamp_us = timestamp_us;
 			pthread_rwlock_unlock(&com.rwlock);
@@ -496,15 +496,15 @@ static void SDL2FATAL(void)
 	exit(EXIT_FAILURE);
 }
 
-static ImU32 get_status_color(const char* nm, int st)
+static ImU32 get_status_label_color(const char* label, int st)
 {
 	//INDEX SECTOR FAULT SEEK_ERROR ON_CYLINDER UNIT_READY ADDRESS_MARK UNIT_SELECTED SEEK_END
 	double r,g,b;
-	if (strcmp(nm, "FAULT") == 0 || strcmp(nm, "SEEK_ERROR") == 0) {
+	if (strcmp(label, "FAULT") == 0 || strcmp(label, "SEEK_ERROR") == 0) {
 		r = 0.8;
 		g = 0.2;
 		b = 0;
-	} else if (strcmp(nm, "ON_CYLINDER") == 0 || strcmp(nm, "UNIT_READY") == 0 || strcmp(nm, "UNIT_SELECTED") == 0 || strcmp(nm, "SEEK_END") == 0) {
+	} else if (strcmp(label, "ON_CYLINDER") == 0 || strcmp(label, "UNIT_READY") == 0 || strcmp(label, "UNIT_SELECTED") == 0 || strcmp(label, "SEEK_END") == 0) {
 		r = 0.2;
 		g = 0.5;
 		b = 0;
@@ -607,6 +607,8 @@ int main(int argc, char** argv)
 	bool poll_gpio = false;
 	uint32_t last_poll_gpio = 0;
 
+	int max_status_txt_width = 0;
+
 	int font_size = 18;
 	if (argc == 3) {
 		font_size = atoi(argv[2]);
@@ -637,7 +639,7 @@ int main(int argc, char** argv)
 
 		{ // controller status window
 			ImGui::Begin("Controller Status");
-			const uint64_t now_us = com.controller_timestamp_us;
+			const int64_t now_us = com.controller_timestamp_us;
 			ImGui::Text("Uptime: %.1fs", (double)now_us * 1e-6);
 
 			ImGui::SliderFloat("scale", &status_scope_scale, 1.0f, 60.0f, "%.1f seconds");
@@ -649,34 +651,41 @@ int main(int argc, char** argv)
 				ImGui::TableSetupColumn("1", ImGuiTableColumnFlags_WidthFixed);
 				const struct controller_status* cs = com.controller_status_arr;
 				const int ncs = arrlen(cs);
-				unsigned mask = 1;
-				for (int row = 0; row < n_rows; row++, mask <<= 1) {
-					const char* s = com.status_descriptor_arr[row];
-					ImU32 st0col = get_status_color(s, 0);
-					ImU32 st1col = get_status_color(s, 1);
+				for (int row = 0; row < n_rows; row++) {
+					const unsigned mask = 1 << row;
+					const char* label = com.status_descriptor_arr[row];
+					ImU32 st0col = get_status_label_color(label, 0);
+					ImU32 st1col = get_status_label_color(label, 1);
 
 					ImGui::TableNextRow();
 					ImGui::TableSetColumnIndex(0);
 
+					int eps_count = 0;
 					if (ncs > 0) {
+						const int64_t ts_horizon = now_us - (int64_t)(status_scope_scale * 1e6f);
 						ImVec2 area_p0 = ImGui::GetCursorScreenPos();
 						ImVec2 area_sz = ImGui::GetContentRegionAvail();
 						ImDrawList* draw_list = ImGui::GetWindowDrawList();
 						float x_right = area_p0.x+area_sz.x;
 						for (int cursor = ncs-1; cursor >= 0 && draw_list->_VtxCurrentIdx < (1<<15); cursor--) {
 							const struct controller_status* st = &cs[cursor];
-							const double ts = st->timestamp_us;
-							const double ts1 = now_us;
-							const double ts0 = ts1 - status_scope_scale * 1e6;
-							const double q = (ts-ts0) / (ts1-ts0);
+							const double q = (double)(st->timestamp_us - ts_horizon) / (double)(now_us - ts_horizon);
+							const int on = (st->status & mask) != 0;
+							const int prev_on = cursor == 0 ? 0 : (cs[cursor-1].status & mask) != 0;
+							const int edge = (on != prev_on);
 							const float x_left = area_p0.x + area_sz.x*q;
-							if (st->status & mask) {
+							if (edge && (now_us - st->timestamp_us) < 1000000) {
+								eps_count++;
+							}
+							if (on && edge) { // 1->0
 								draw_list->AddRectFilled(
 									ImVec2(x_left, area_p0.y),
 									ImVec2(x_right, area_p0.y+font_size),
 									st1col);
 							}
-							x_right = x_left;
+							if (!on && edge) { // 0->1
+								x_right = x_left;
+							}
 							if (x_right < area_p0.x) break;
 						}
 					}
@@ -684,7 +693,17 @@ int main(int argc, char** argv)
 					ImGui::TableSetColumnIndex(1);
 					const int is_on = (ncs > 0) && (cs[ncs-1].status & mask);
 					ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg, is_on ? st1col : st0col);
-					ImGui::Text("%s", s);
+					{
+						char txt[1<<12];
+						int w = eps_count > 0
+							? snprintf(txt, sizeof txt, "%s (%dEPS)", label, eps_count)
+							: snprintf(txt, sizeof txt, "%s", label);
+						assert(0 < w && w < sizeof(txt));
+						while (w < max_status_txt_width) txt[w++] = ' ';
+						txt[w] = 0;
+						if (w > max_status_txt_width) max_status_txt_width = w;
+						ImGui::Text("%s", txt);
+					}
 				}
 				ImGui::EndTable();
 			}
