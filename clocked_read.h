@@ -1,6 +1,7 @@
 #ifndef CLOCKED_READ_H
 
 #include <stdint.h>
+#include "hardware/pio.h"
 
 #include "drive.h"
 #include "controller_protocol.h"
@@ -17,7 +18,7 @@
 
 #define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (64)
 
-void clocked_read_init(void);
+void clocked_read_init(PIO pio, uint dma_channel);
 void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count);
 int clocked_read_is_running(void);
 

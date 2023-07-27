@@ -20,6 +20,7 @@
 	COMMAND(set_ctrl,                 "u"        ) \
 	COMMAND(led,                      "b"        ) \
 	COMMAND(xfer_test,                "u"        ) \
+	COMMAND(loopback_test,            "u"        ) \
 	COMMAND(terminate_op,             ""         ) \
 	COMMAND(op_blink_test,            "u"        ) \
 	COMMAND(op_raw_tag,               "uu"       ) \

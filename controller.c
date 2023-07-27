@@ -14,7 +14,7 @@
 #include "xop.h"
 #include "base64.h"
 #include "adler32.h"
-#include "dbgclk.pio.h"
+#include "loopback_test.h"
 
 unsigned stdin_received_bytes;
 unsigned is_subscribing_to_status;
@@ -29,7 +29,6 @@ static inline int gpio_type_to_dir(enum gpio_type t)
 	case DATA:     return GPIO_IN;
 	case STATUS:   return GPIO_IN;
 	case CONTROL:  return GPIO_OUT;
-	case DBGCLK:   return GPIO_OUT;
 	default: PANIC(PANIC_XXX);
 	}
 }
@@ -213,7 +212,7 @@ static void parse(void)
 			const unsigned buffer_index = allocate_buffer(size);
 			char* s = get_buffer_filename(buffer_index);
 			snprintf(s, CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH, "_xfertest-bufidx%d-%dbytes.garbage", buffer_index, size);
-			size = get_buffer_size(buffer_index); // may be truncated
+			size = get_buffer_size(buffer_index); // size can be truncated by MAX_DATA_BUFFER_SIZE
 			uint8_t* p = get_buffer_data(buffer_index);
 			for (unsigned i = 0; i < size; i++) {
 				*(p++) = (i & 0xff) + ((i >> 8) & 0xff) + ((i >> 16) & 0xff) + ((i >> 24) & 0xff);
@@ -221,12 +220,15 @@ static void parse(void)
 			wrote_buffer(buffer_index);
 		}
 	} break;
+	case COMMAND_loopback_test: {
+		loopback_test_fire(command_parser.arguments[0].u);
+	} break;
 	case COMMAND_terminate_op: {
 		terminate_op();
 		printf(CPPP_INFO "TERMINATE!\n");
 	} break;
 	case COMMAND_op_blink_test: {
-		int fail = command_parser.arguments[0].u;
+		const int fail = command_parser.arguments[0].u;
 		job_begin();
 		xop_blink_test(fail);
 	} break;
@@ -288,21 +290,6 @@ static void parse(void)
 	}
 }
 
-static void dbgclk_start(void)
-{
-	const PIO pio = pio1;
-	const uint offset = pio_add_program(pio, &dbgclk_program);
-	const uint sm = pio_claim_unused_sm(pio, true);
-	pio_sm_config cfg = dbgclk_program_get_default_config(0);
-	const unsigned gpio_pin = GPIO_DEBUGCLK_10MHZ;
-	pio_gpio_init(pio, gpio_pin);
-	sm_config_set_set_pins(&cfg, gpio_pin, 1);
-	//pio_sm_set_consecutive_pindirs(pio, sm, gpio_pin, /*pin_count=*/1, /*is_out=*/true);
-	sm_config_set_clkdiv_int_frac(&cfg, 3, 0); // XXX trying to aim for ~10MHz
-	pio_sm_init(pio, sm, offset, &cfg);
-	pio_sm_set_enabled(pio, sm, true);
-}
-
 int main()
 {
 	// I/O pin config
@@ -320,8 +307,8 @@ int main()
 	EMIT_PIN_CONFIG
 	#undef PIN
 
-	clocked_read_init();
-	dbgclk_start();
+	clocked_read_init(pio0,  /*dma_channel=*/0);
+	loopback_test_prep(pio1, /*dma_channel=*/1);
 
 	stdio_init_all();
 
@@ -332,6 +319,7 @@ int main()
 		status_housekeeping();
 		handle_frontend_data_transfers();
 		handle_job_status();
+		loopback_test_tick();
 		//tight_loop_contents(); // does nothing
 		tud_task();
 	}

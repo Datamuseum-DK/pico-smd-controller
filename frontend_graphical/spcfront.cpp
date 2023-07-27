@@ -547,10 +547,13 @@ int main(int argc, char** argv)
 	if (argc != 2 && argc != 3) {
 		fprintf(stderr, "Usage: %s </path/to/tty/for/smd-pico-controller> [font size px]\n", argv[0]);
 		fprintf(stderr, "Try `/dev/ttyACM0`, or run `dmesg` or `ls -ltr /dev/` to see/guess what tty is assigned to the device\n");
+		fprintf(stderr, "You can also pass an empty string as path to test the GUI (many things don't really work)\n");
 		exit(EXIT_FAILURE);
 	}
 
-	com_startup(argv[1]);
+	if (strcmp(argv[1], "") != 0) {
+		com_startup(argv[1]);
+	}
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) SDL2FATAL();
 
@@ -906,6 +909,13 @@ int main(int argc, char** argv)
 				ImGui::SameLine();
 				if (ImGui::Button("(Fail)")) {
 					com_enqueue("op_blink_test 1");
+				}
+				if (ImGui::Button("Loopback Test (1000b)")) {
+					com_enqueue("loopback_test 1000");
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("(10000b)")) {
+					com_enqueue("loopback_test 10000");
 				}
 				ImGui::Checkbox("Poll all GPIO (see log output)", &poll_gpio);
 				if (ImGui::Button("Execute Data Download Test (1000b)")) {
