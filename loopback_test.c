@@ -48,6 +48,9 @@ void loopback_test_fire(uint n_bytes)
 
 	loopback_test_generate_data(loopback_buffer, n_bytes);
 
+	pio_sm_clear_fifos(pio, sm);
+	pio_sm_restart(pio, sm);
+
 	pio_gpio_init(pio, GPIO_LOOPBACK_TEST_DATA); // translates to gpio_set_function(GPIO_LOOPBACK_TEST_DATA, PIO0/1)
 	pio_gpio_init(pio, GPIO_LOOPBACK_TEST_CLOCK);
 

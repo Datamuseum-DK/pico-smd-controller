@@ -53,6 +53,7 @@ void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count)
 	if (buffer_status[buffer_index] != BUSY) PANIC(PANIC_UNEXPECTED_STATE);
 
 	pio_sm_set_enabled(pio, sm, false);
+
 	pio_sm_clear_fifos(pio, sm);
 	pio_sm_restart(pio, sm);
 
