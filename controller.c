@@ -221,7 +221,9 @@ static void parse(void)
 		}
 	} break;
 	case COMMAND_loopback_test: {
-		loopback_test_fire(command_parser.arguments[0].u);
+		uint n_bytes = command_parser.arguments[0].u;
+		printf(CPPP_INFO "firing loopback test with %d bytes\n", n_bytes);
+		loopback_test_fire(n_bytes);
 	} break;
 	case COMMAND_terminate_op: {
 		terminate_op();

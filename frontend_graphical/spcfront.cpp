@@ -982,7 +982,7 @@ int main(int argc, char** argv)
 
 		if (poll_gpio) {
 			uint32_t t = SDL_GetTicks();
-			if (t > (last_poll_gpio + 100)) {
+			if (t > (last_poll_gpio + 25)) {
 				com_enqueue("poll_gpio");
 				last_poll_gpio = t;
 			}

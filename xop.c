@@ -123,12 +123,12 @@ static void pin_wait(unsigned gpio, unsigned value, unsigned timeout_us)
 	pin_mask_wait((1<<gpio), value ? (1<<gpio) : 0, timeout_us);
 }
 
-static void pin1_wait(unsigned gpio, unsigned timeout_us)
+static void pin_wait_for_one(unsigned gpio, unsigned timeout_us)
 {
 	pin_wait(gpio, 1, timeout_us);
 }
 
-static void pin0_wait(unsigned gpio, unsigned timeout_us)
+static void pin_wait_for_zero(unsigned gpio, unsigned timeout_us)
 {
 	pin_wait(gpio, 0, timeout_us);
 }
@@ -141,7 +141,7 @@ static void control_clear(void)
 static void select_unit0(void)
 {
 	tag_raw(TAG_UNIT_SELECT, 0);
-	pin1_wait(GPIO_UNIT_SELECTED, 100000);
+	pin_wait_for_one(GPIO_UNIT_SELECTED, 100000);
 	check_drive_error();
 }
 
@@ -220,8 +220,8 @@ static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsi
 {
 	if (!skip_checks) check_drive_error();
 	if (index_sync) {
-		pin0_wait(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10);
-		pin1_wait(GPIO_INDEX, (1000000 / (DRIVE_RPS/3))); // wait at most 3 revolutions
+		pin_wait_for_zero(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10);
+		pin_wait_for_one(GPIO_INDEX, (1000000 / (DRIVE_RPS/3))); // wait at most 3 revolutions
 	}
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {
