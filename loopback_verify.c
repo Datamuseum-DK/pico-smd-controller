@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 			}
 			bits_expected[8] = 0;
 			bits_actual[8] = 0;
-			printf("at position 0x%.4x: expected 0x%.2x (%s); actual was 0x%.2x (%s)\n", i, expected[i], bits_expected, actual[i], bits_actual);
+			printf("at position 0x%.4lx: expected 0x%.2x (%s); actual was 0x%.2x (%s)\n", i, expected[i], bits_expected, actual[i], bits_actual);
 		}
 	}
 
