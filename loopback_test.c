@@ -5,6 +5,7 @@
 #include "loopback_test.pio.h"
 #include "controller_protocol.h"
 #include "clocked_read.h"
+#include "base.h"
 
 static PIO pio;
 static uint sm;
@@ -39,17 +40,14 @@ void loopback_test_prep(PIO _pio, uint _dma_channel)
 	pio_sm_init(pio, sm, offset, &cfg);
 }
 
+uint8_t loopback_buffer[10000];
 void loopback_test_fire(uint n_bytes)
 {
-	if (!can_allocate_buffer()) return;
+	if (n_bytes > ARRAY_LENGTH(loopback_buffer)) n_bytes = ARRAY_LENGTH(loopback_buffer);
 
 	clear_gpio();
 
-	buffer_index = allocate_buffer(n_bytes);
-	n_bytes = get_buffer_size(buffer_index);
-	uint8_t* data = get_buffer_data(buffer_index);
-	loopback_test_generate_data(data, n_bytes);
-	wrote_buffer(buffer_index);
+	loopback_test_generate_data(loopback_buffer, n_bytes);
 
 	pio_gpio_init(pio, GPIO_LOOPBACK_TEST_DATA); // translates to gpio_set_function(GPIO_LOOPBACK_TEST_DATA, PIO0/1)
 	pio_gpio_init(pio, GPIO_LOOPBACK_TEST_CLOCK);
@@ -62,7 +60,7 @@ void loopback_test_fire(uint n_bytes)
 		dma_channel,
 		&dma_channel_cfg,
 		/*write_addr=*/&pio->txf[sm],
-		/*read_addr=*/data,
+		/*read_addr=*/loopback_buffer,
 		/*transfer_count*/n_bytes>>2,
 		true // start now!
 	);
