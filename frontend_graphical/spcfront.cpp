@@ -590,28 +590,22 @@ int main(int argc, char** argv)
 
 	float status_scope_scale = 7.5;
 
-	#ifdef LOOPBACK_TEST
-	const int IS_LOOPBACK_TEST = 1;
-	#else
-	const int IS_LOOPBACK_TEST = 0;
-	#endif
-
 	bool previous_debug_led = false,     debug_led = false;
 	int previous_debug_control_pins = 0, debug_control_pins = 0;
 	int raw_tag_selected_index = 3;
 	int raw_tag1_cylinder = 0;
 	int raw_tag2_head = 0;
 	int raw_tag3_flags = 0;
-	int basic_selected_index = IS_LOOPBACK_TEST ? 4 : 0; // #pray
+	int basic_selected_index = 0;
 	int basic_cylinder = 0;
 	bool basic_cylinder_allow_overflow = false;
 	int basic_head = 0;
-	bool basic_index_sync  = IS_LOOPBACK_TEST ? false : true;
-	bool basic_skip_checks = IS_LOOPBACK_TEST ? true  : false;
+	bool basic_index_sync  = true;
+	bool basic_skip_checks = false;
 	int batch_cylinder0 = 0;
 	int batch_cylinder1 = 822;
 	int batch_head_set = 31;
-	int common_32bit_word_count = IS_LOOPBACK_TEST ? 2048 : MAX_DATA_BUFFER_SIZE/4;
+	int common_32bit_word_count = MAX_DATA_BUFFER_SIZE/4;
 	int common_servo_offset = 0;
 	int common_data_strobe_delay = 0;
 	bool poll_gpio = false;
@@ -646,6 +640,20 @@ int main(int argc, char** argv)
 		ImGui::NewFrame();
 
 		pthread_rwlock_rdlock(&com.rwlock);
+
+		#ifdef LOOPBACK_TEST
+		{
+			ImGui::Begin("LOOPBACK TEST");
+			if (ImGui::Button("Read 8k")) {
+				com_enqueue("op_read_data 2048 0 1");
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Transmit Data")) {
+				com_enqueue("loopback_test 10000");
+			}
+			ImGui::End();
+		}
+		#endif
 
 		{ // controller status window
 			ImGui::Begin("Controller Status");
