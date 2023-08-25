@@ -47,7 +47,7 @@ static void status_housekeeping(void)
 			}
 		EMIT_PIN_CONFIG
 		#undef PIN
-		if ((status != current_status) && ((t - last_status_timestamp) > (1000000/60))) {
+		if ((status != current_status) && ((t - last_status_timestamp) > (1000000/200))) {
 			if (is_subscribing_to_status) {
 				printf("%s %llu %d\n", CPPP_STATUS, t, status);
 				last_status_timestamp = t;

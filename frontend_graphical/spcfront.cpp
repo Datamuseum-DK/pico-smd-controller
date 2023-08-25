@@ -1,4 +1,7 @@
-#define LOOPBACK_TEST
+//#define LOOPBACK_TEST
+#define DIAGNOSTICS
+#define TELEMETRY_LOG
+
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -30,6 +33,7 @@
 #define COMMAND(NAME,ARGFMT) const char* CMDSTR_##NAME = #NAME;
 EMIT_COMMANDS
 #undef COMMAND
+#include "pin_config.h"
 
 #include "drive.h"
 #include "base64.h"
@@ -83,6 +87,7 @@ struct com_file {
 	size_t bytes_written;
 	size_t bytes_total;
 	struct adler32 adler;
+	int n_non_zero_bytes;
 };
 
 struct com {
@@ -103,7 +108,90 @@ struct com {
 	struct com_file file;
 
 	bool log_status_changes = false;
+
+	#ifdef TELEMETRY_LOG
+	FILE* telemetry_log_file;
+	#endif
 } com;
+
+
+#ifdef TELEMETRY_LOG
+__attribute__((format(printf, 1, 2)))
+static void telemetry_log(const char* fmt, ...)
+{
+	if (com.telemetry_log_file == NULL) return;
+
+	time_t t = time(NULL);
+	const struct tm* tmp = localtime(&t);
+	char buf[1<<12];
+	strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tmp);
+	FILE* f = com.telemetry_log_file;
+	fprintf(f, "%s   ", buf);
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
+	fprintf(f, "\n");
+	fflush(com.telemetry_log_file);
+}
+
+int telemetry_pending = 0;
+int current_controls = 0;
+int last_controls = 0;
+int current_st = 0;
+int last_st = 0;
+
+static void telemetry_log_status(void)
+{
+	if (com.telemetry_log_file == NULL) return;
+
+	// mask out unwanted status changes (unwanted in telemetry.log)
+	current_st &= ~( (1<<0) | (1<<1) | (1<<6));
+
+	if (current_controls == last_controls && current_st == last_st) return;
+	telemetry_pending = 0;
+
+	#define RC(x) \
+		((current_controls&(1<<(CONTROL_ ## x))) != (last_controls&(1<<(CONTROL_ ## x)))) ? '!' : ':', \
+		(current_controls&(1<<(CONTROL_ ## x))) ? '1' : '0'
+	#define RS(x) \
+		((current_st&(1<<(x))) != (last_st&(1<<(x)))) ? '!' : ':', \
+		(current_st&(1<<(x))) ? '1' : '0'
+	telemetry_log(
+		"TU%c%c "
+		"T1%c%c "
+		"T2%c%c "
+		"T3%c%c "
+		"B0%c%c "
+		"B1%c%c "
+		"B2%c%c "
+		"B3%c%c "
+		"B4%c%c "
+		"B5%c%c "
+		"B6%c%c "
+		"B7%c%c "
+		"B8%c%c "
+		"B9%c%c "
+		":: "
+		"FA%c%c "
+		"SR%c%c "
+		"OC%c%c "
+		"UR%c%c "
+		"US%c%c "
+		"SE%c%c "
+	,
+		RC(UNIT_SELECT_TAG),
+		RC(TAG1), RC(TAG2), RC(TAG3),
+		RC(BIT0), RC(BIT1), RC(BIT2), RC(BIT3), RC(BIT4), RC(BIT5), RC(BIT6), RC(BIT7), RC(BIT8), RC(BIT9),
+		RS(2), RS(3), RS(4), RS(5), RS(7), RS(8)
+	);
+	#undef RS
+	#undef RC
+
+	last_controls = current_controls;
+	last_st = current_st;
+}
+#endif
 
 static int starts_with(char* s, const char* prefix)
 {
@@ -247,6 +335,7 @@ static void com__handle_msg(char* msg)
 				comfile->bytes_total = n_bytes;
 				adler32_init(&comfile->adler);
 				com_printf("D/L %d bytes [%s]...", n_bytes, path);
+				comfile->n_non_zero_bytes = 0;
 				break;
 			}
 		} else {
@@ -275,6 +364,7 @@ static void com__handle_msg(char* msg)
 					} else {
 						const size_t n_recv = eb - buffer;
 						adler32_push(&comfile->adler, buffer, n_recv);
+						for (size_t i = 0; i < n_recv; i++) if (buffer[i] != 0) comfile->n_non_zero_bytes++;
 						comfile->bytes_written += n_recv;
 						size_t remaining = n_recv;
 						uint8_t* tp = buffer;
@@ -322,6 +412,9 @@ static void com__handle_msg(char* msg)
 					return;
 				}
 				close(comfile->fd);
+				if (comfile->n_non_zero_bytes == 0) {
+					com_printf("WARNING: downloaded file contains only zeroes");
+				}
 				comfile->in_use = 0;
 			} else {
 				bad_msg(msg);
@@ -483,6 +576,12 @@ static void com_startup(char* tty_path)
 
 static void com_shutdown(void)
 {
+	#ifdef TELEMETRY_LOG
+	if (com.telemetry_log_file != NULL) {
+		telemetry_log("END");
+		fclose(com.telemetry_log_file);
+	}
+	#endif
 	if (flock(com.fd, LOCK_UN) == -1) {
 		fprintf(stderr, "%s: %s\n", com.tty_path, strerror(errno));
 		exit(EXIT_FAILURE);
@@ -552,9 +651,14 @@ int main(int argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if (strcmp(argv[1], "") != 0) {
-		com_startup(argv[1]);
-	}
+	#ifdef TELEMETRY_LOG
+	com.telemetry_log_file = fopen("telemetry.log", "a");
+	assert((com.telemetry_log_file != NULL) && "failed to open telemetry.log for appending");
+	telemetry_log("BEGIN");
+	#endif
+
+	const int has_com = strcmp(argv[1], "") != 0;
+	if (has_com) com_startup(argv[1]);
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) SDL2FATAL();
 
@@ -655,6 +759,67 @@ int main(int argc, char** argv)
 		}
 		#endif
 
+		#ifdef DIAGNOSTICS
+		{
+			ImGui::Begin("DIAGNOSTICS");
+
+			ImGui::SeparatorText("Output pins");
+			ImGui::CheckboxFlags("UNIT SELECT TAG", &debug_control_pins,                 0x000001);
+			ImGui::CheckboxFlags("TAG1 (seek)", &debug_control_pins,                     0x000020);
+			ImGui::CheckboxFlags("TAG2 (head)", &debug_control_pins,                     0x000040);
+			ImGui::CheckboxFlags("TAG3 (control)", &debug_control_pins,                  0x000080);
+			ImGui::CheckboxFlags("BIT0 (/write gate)", &debug_control_pins,              0x000100);
+			ImGui::CheckboxFlags("BIT1 (/read gate)", &debug_control_pins,               0x000200);
+			ImGui::CheckboxFlags("BIT2 (/servo offset positive)", &debug_control_pins,   0x000400);
+			ImGui::CheckboxFlags("BIT3 (/servo offset negative)", &debug_control_pins,   0x000800);
+			ImGui::CheckboxFlags("BIT4 (/controller fault clear)", &debug_control_pins,  0x001000);
+			ImGui::CheckboxFlags("BIT5 (/address mark enable)", &debug_control_pins,     0x002000);
+			ImGui::CheckboxFlags("BIT6 (/return to zero)", &debug_control_pins,          0x004000);
+			ImGui::CheckboxFlags("BIT7 (/data strobe early)", &debug_control_pins,       0x008000);
+			ImGui::CheckboxFlags("BIT8 (/data strobe late)", &debug_control_pins,        0x010000);
+			ImGui::CheckboxFlags("BIT9 (/dual channel release)", &debug_control_pins,    0x020000);
+
+			ImGui::Checkbox("*LED", &debug_led);
+			if (ImGui::Button("Set all")) {
+				int mask = 1;
+				#define CONTROL(NAME,SUPPORTED) \
+					if (SUPPORTED) debug_control_pins |= mask; \
+					mask <<= 1;
+				EMIT_CONTROLS
+				#undef CONTROL
+				debug_led = 1;
+			}
+			if (ImGui::Button("Clear all")) {
+				debug_control_pins = 0;
+				debug_led = 0;
+			}
+
+			ImGui::SeparatorText("Read");
+			if (ImGui::Button("Read data (no checks)")) {
+				com_enqueue("op_read_data %d %d %d", MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
+			}
+
+			#ifdef TELEMETRY_LOG
+			ImGui::SeparatorText("Write to telemetry.log");
+			static char telemtry_log_message[1<<10] = "";
+			if (ImGui::Button("LOG:")) {
+				telemetry_log("%s", telemtry_log_message);
+			}
+			ImGui::SameLine();
+			ImGui::InputText("##logmsg", telemtry_log_message, IM_ARRAYSIZE(telemtry_log_message));
+			if (ImGui::Button("head move (canned log)")) {
+				telemetry_log("head move");
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("fault lamp")) {
+				telemetry_log("fault lamp");
+			}
+			#endif
+
+			ImGui::End();
+		}
+		#endif
+
 		{ // controller status window
 			ImGui::Begin("Controller Status");
 			const int64_t now_us = com.controller_timestamp_us;
@@ -748,6 +913,7 @@ int main(int argc, char** argv)
 			ImGui::End();
 		}
 
+		#ifndef DIAGNOSTICS
 		{ // controller control
 			ImGui::Begin("Controller Control");
 
@@ -984,6 +1150,7 @@ int main(int argc, char** argv)
 
 			ImGui::End();
 		}
+		#endif
 
 		if (debug_control_pins != previous_debug_control_pins) {
 			com_enqueue("set_ctrl %d", debug_control_pins);
@@ -1011,6 +1178,17 @@ int main(int argc, char** argv)
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 		SDL_GL_SwapWindow(window);
+
+		#ifdef TELEMETRY_LOG
+		current_controls = debug_control_pins;
+		if (has_com) {
+			pthread_rwlock_rdlock(&com.rwlock);
+			const int n = arrlen(com.controller_status_arr);
+			current_st = n == 0 ? 0 : com.controller_status_arr[n-1].status;
+			pthread_rwlock_unlock(&com.rwlock);
+		}
+		telemetry_log_status();
+		#endif
 	}
 
 	// TODO signal thread to quit

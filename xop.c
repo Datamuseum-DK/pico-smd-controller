@@ -105,11 +105,11 @@ static void check_drive_error(void)
 	if ((pins & READY_MASK) != READY_MASK) ERROR(XST_ERR_DRIVE_NOT_READY);
 }
 
-static void pin_mask_wait(unsigned mask, unsigned value, unsigned timeout_us)
+static void pin_mask_wait(unsigned mask, unsigned value, unsigned timeout_us, int check_error)
 {
 	const absolute_time_t t0 = get_absolute_time();
 	while (1) {
-		check_drive_error();
+		if (check_error) check_drive_error();
 		if ((gpio_get_all() & mask) == value) break;
 		if ((get_absolute_time() - t0) > timeout_us) {
 			ERROR(XST_ERR_TIMEOUT);
@@ -118,19 +118,19 @@ static void pin_mask_wait(unsigned mask, unsigned value, unsigned timeout_us)
 	}
 }
 
-static void pin_wait(unsigned gpio, unsigned value, unsigned timeout_us)
+static void pin_wait(unsigned gpio, unsigned value, unsigned timeout_us, int check_error)
 {
-	pin_mask_wait((1<<gpio), value ? (1<<gpio) : 0, timeout_us);
+	pin_mask_wait((1<<gpio), value ? (1<<gpio) : 0, timeout_us, check_error);
 }
 
-static void pin_wait_for_one(unsigned gpio, unsigned timeout_us)
+static void pin_wait_for_one(unsigned gpio, unsigned timeout_us, int check_error)
 {
-	pin_wait(gpio, 1, timeout_us);
+	pin_wait(gpio, 1, timeout_us, check_error);
 }
 
-static void pin_wait_for_zero(unsigned gpio, unsigned timeout_us)
+static void pin_wait_for_zero(unsigned gpio, unsigned timeout_us, int check_error)
 {
-	pin_wait(gpio, 0, timeout_us);
+	pin_wait(gpio, 0, timeout_us, check_error);
 }
 
 static void control_clear(void)
@@ -141,7 +141,7 @@ static void control_clear(void)
 static void select_unit0(void)
 {
 	tag_raw(TAG_UNIT_SELECT, 0);
-	pin_wait_for_one(GPIO_UNIT_SELECTED, 100000);
+	pin_wait_for_one(GPIO_UNIT_SELECTED, 100000, 0);
 	check_drive_error();
 }
 
@@ -195,7 +195,7 @@ static void select_cylinder(unsigned cylinder)
 	// NOTE: drive doc says that "Seek End is a combination of ON CYL or
 	// SEEK ERROR" suggesting it's a simple OR-gate of those signals. But
 	// it's a good sanity check nevertheless (cable/drive may be broken).
-	pin_mask_wait(bits, bits, 1000000);
+	pin_mask_wait(bits, bits, 1000000, 1);
 }
 
 static void tag_select_head(unsigned head)
@@ -220,8 +220,8 @@ static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsi
 {
 	if (!skip_checks) check_drive_error();
 	if (index_sync) {
-		pin_wait_for_zero(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10);
-		pin_wait_for_one(GPIO_INDEX, (1000000 / (DRIVE_RPS/3))); // wait at most 3 revolutions
+		pin_wait_for_zero(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10, !skip_checks);
+		pin_wait_for_one(GPIO_INDEX, (1000000 / (DRIVE_RPS/3)), !skip_checks); // wait at most 3 revolutions
 	}
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {

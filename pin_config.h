@@ -45,9 +45,11 @@ enum gpio_map {
 	#undef PIN
 };
 
+#ifndef __cplusplus
 _Static_assert(
 	GPIO_READ_CLOCK == (GPIO_READ_DATA+1),
 	"READ_DATA and READ_CLOCK must have consequtive GPIO pins due to PIO constraints (see PINCTRL discussion in RP2040 datasheet)");
+#endif
 
 #define CONFIG_H
 #endif
