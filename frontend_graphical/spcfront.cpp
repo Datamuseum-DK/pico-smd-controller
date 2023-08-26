@@ -126,7 +126,7 @@ static void telemetry_log(const char* fmt, ...)
 	char buf[1<<12];
 	strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tmp);
 	FILE* f = com.telemetry_log_file;
-	fprintf(f, "%s   ", buf);
+	fprintf(f, "%s  ", buf);
 	va_list ap;
 	va_start(ap, fmt);
 	vfprintf(f, fmt, ap);
@@ -152,33 +152,33 @@ static void telemetry_log_status(void)
 	telemetry_pending = 0;
 
 	#define RC(x) \
-		((current_controls&(1<<(CONTROL_ ## x))) != (last_controls&(1<<(CONTROL_ ## x)))) ? '!' : ':', \
-		(current_controls&(1<<(CONTROL_ ## x))) ? '1' : '0'
+		((current_controls&(1<<(CONTROL_ ## x))) != (last_controls&(1<<(CONTROL_ ## x)))) ? '>' : ':', \
+		(current_controls&(1<<(CONTROL_ ## x))) ? '*' : '.'
 	#define RS(x) \
-		((current_st&(1<<(x))) != (last_st&(1<<(x)))) ? '!' : ':', \
-		(current_st&(1<<(x))) ? '1' : '0'
+		((current_st&(1<<(x))) != (last_st&(1<<(x)))) ? '>' : ':', \
+		(current_st&(1<<(x))) ? '*' : '.'
 	telemetry_log(
-		"TU%c%c "
-		"T1%c%c "
-		"T2%c%c "
-		"T3%c%c "
-		"B0%c%c "
-		"B1%c%c "
-		"B2%c%c "
-		"B3%c%c "
-		"B4%c%c "
-		"B5%c%c "
-		"B6%c%c "
-		"B7%c%c "
-		"B8%c%c "
-		"B9%c%c "
-		":: "
-		"FA%c%c "
-		"SR%c%c "
-		"OC%c%c "
-		"UR%c%c "
-		"US%c%c "
-		"SE%c%c "
+		" TU%c%c"
+		" T1%c%c"
+		" T2%c%c"
+		" T3%c%c"
+		" B0%c%c"
+		" B1%c%c"
+		" B2%c%c"
+		" B3%c%c"
+		" B4%c%c"
+		" B5%c%c"
+		" B6%c%c"
+		" B7%c%c"
+		" B8%c%c"
+		" B9%c%c"
+		" |"
+		" FA%c%c"
+		" SR%c%c"
+		" OC%c%c"
+		" UR%c%c"
+		" US%c%c"
+		" SE%c%c"
 	,
 		RC(UNIT_SELECT_TAG),
 		RC(TAG1), RC(TAG2), RC(TAG3),
@@ -335,6 +335,7 @@ static void com__handle_msg(char* msg)
 				comfile->bytes_total = n_bytes;
 				adler32_init(&comfile->adler);
 				com_printf("D/L %d bytes [%s]...", n_bytes, path);
+				telemetry_log("beginning to download %d bytes...", n_bytes);
 				comfile->n_non_zero_bytes = 0;
 				break;
 			}
@@ -414,6 +415,9 @@ static void com__handle_msg(char* msg)
 				close(comfile->fd);
 				if (comfile->n_non_zero_bytes == 0) {
 					com_printf("WARNING: downloaded file contains only zeroes");
+					telemetry_log("download done (all zeroes!)");
+				} else {
+					telemetry_log("download done");
 				}
 				comfile->in_use = 0;
 			} else {
