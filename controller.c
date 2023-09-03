@@ -172,6 +172,7 @@ static void parse(void)
 	} break;
 	case COMMAND_subscribe_to_status: {
 		is_subscribing_to_status = command_parser.arguments[0].b;
+		current_status = -1;
 		printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 	} break;
 	case COMMAND_poll_gpio: {
