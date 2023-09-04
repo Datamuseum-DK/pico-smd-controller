@@ -121,12 +121,15 @@ static void telemetry_log(const char* fmt, ...)
 {
 	if (com.telemetry_log_file == NULL) return;
 
-	time_t t = time(NULL);
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	const time_t t = ts.tv_sec;
 	const struct tm* tmp = localtime(&t);
 	char buf[1<<12];
 	strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", tmp);
 	FILE* f = com.telemetry_log_file;
-	fprintf(f, "%s  ", buf);
+	int fractional =  (int)((double)ts.tv_nsec * 1e-5);
+	fprintf(f, "%s.%.4d  ", buf, fractional);
 	va_list ap;
 	va_start(ap, fmt);
 	vfprintf(f, fmt, ap);
