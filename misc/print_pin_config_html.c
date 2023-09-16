@@ -1,6 +1,6 @@
-// $ make print_pin_config_html && ./print_pin_config_html > doc/pin_config.html
-// or
-// $ make print_pin_config_html && ./print_pin_config_html flip > pin_config_flip.html
+// $ cc -I.. print_pin_config_html.c -o print_pin_config_html && ./print_pin_config_html > ../doc/pin_config.html
+// HINT: you can also flip the HTML output:
+// ./print_pin_config_html flip > pin_config_flip.html
 
 #include <stdlib.h>
 #include <stdio.h>
