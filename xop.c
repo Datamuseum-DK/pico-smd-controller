@@ -6,6 +6,15 @@
 // anything else to use core1 for? (all the high bandwidth heavy lifting is
 // entirely handled by PIO/DMA)
 
+// FIXME there are probably some bad assumptions in here regarding "tagging";
+// it would appear that UNIT_SELECT_TAG must be held high during drive
+// operations (I thought a 0->1->0 pulse would do the trick, but that's
+// probably a misconception). Similarly it might be the case that e.g.
+// TAG3+BIT1 must be held high during the entire read operation, and not just
+// as a pulse preceeding the read. (at the time of writing we're only flipping
+// output bits manually and seeing how the drive responds, so all this code is
+// mostly unused)
+
 #include <stdio.h>
 #include "pico/multicore.h"
 
