@@ -1,4 +1,4 @@
-// make loopback_verify && ./loopback_verify <path/to/file>
+// cc -I.. loopback_verify.c -o loopback_verify && ./loopback_verify <path/to/file>
 
 #include <assert.h>
 #include <stdint.h>
