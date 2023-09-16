@@ -1,6 +1,4 @@
-Attempt to write a read-only disk controller for a CDC 9762(/9760) Storage Module
-Drive running on a Raspberry Pi Pico (RP2040).
-
+A work-in-progress read-only(/archival) disk controller for CDC BK4XX/BK5XX (9760/9762) Storage Module Drives. It requires a Raspberry Pi Pico (RP2040) and some custom differential line driver/receiver hardware, and allows a PC to control the drive and receive status and data from it. The PC software ("frontend") also doubles as a debugging/diagnostics tool since it allows you to send arbitrary drive commands, has graphical display of drive status, and it logs what it sees. It is part of an ongoing effort to archive disk packs for a CDC BK5XX/9762 80MB drive at [datamuseum.dk](https://datamuseum.dk)
 
 ## Hardware
 Pico pin config:
