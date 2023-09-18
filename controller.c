@@ -47,6 +47,11 @@ static void status_housekeeping(void)
 			}
 		EMIT_PIN_CONFIG
 		#undef PIN
+		// TODO FIXME: INDEX (60Hz) and SECTOR (~2kHz?) events should
+		// probably be sent as frequencies instead of individual edge
+		// events, but the rate limiting may still be a good idea (we
+		// see noisy inputs sometimes) to prevent stdout buffer
+		// overflows...
 		if ((status != current_status) && ((t - last_status_timestamp) > (1000000/200))) {
 			if (is_subscribing_to_status) {
 				printf("%s %llu %d\n", CPPP_STATUS, t, status);
