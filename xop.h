@@ -18,8 +18,7 @@ absolute_time_t xop_duration_us(void);
 void terminate_op(void);
 
 void xop_blink_test(int fail);
-void xop_raw_tag(enum tag tag, unsigned argument);
-void xop_rtz(void);
+void xop_tag3_strobe(unsigned ctrl);
 void xop_select_unit0(void);
 void xop_select_cylinder(unsigned cylinder);
 void xop_select_head(unsigned head);

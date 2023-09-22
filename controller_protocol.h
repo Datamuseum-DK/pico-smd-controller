@@ -23,9 +23,8 @@
 	COMMAND(loopback_test,            "u"        ) \
 	COMMAND(terminate_op,             ""         ) \
 	COMMAND(op_blink_test,            "u"        ) \
-	COMMAND(op_raw_tag,               "uu"       ) \
 	COMMAND(op_select_unit0,          ""         ) \
-	COMMAND(op_rtz,                   ""         ) \
+	COMMAND(op_tag3_strobe,           "u"        ) \
 	COMMAND(op_select_cylinder,       "u"        ) \
 	COMMAND(op_select_head,           "u"        ) \
 	COMMAND(op_read_enable,           "ii"       ) \
@@ -34,9 +33,9 @@
 
 // controller protocol payload prefixes: response from controller should begin
 // with one of these
-#define CPPP_STATUS_DESCRIPTORS "DS"
+#define CPPP_FREQ               "HZ"
 #define CPPP_STATUS             "ST"
-#define CPPP_STATUS_TIME        "S0"
+#define CPPP_TIME               "TI"
 #define CPPP_DATA_HEADER        "F0"
 #define CPPP_DATA_LINE          "F1"
 #define CPPP_DATA_FOOTER        "F2"
@@ -77,14 +76,6 @@ enum ctrl {
 _Static_assert(CONTROL_MAX <= 32, "must fit in 32-bit bitmask");
 #endif
 
-enum tag {
-	TAG_UNIT_SELECT = 0,
-	TAG1            = 1,
-	TAG2            = 2,
-	TAG3            = 3,
-	TAG_CLEAR       = 999,
-};
-
 #define EMIT_TAG3_BITS                                                                    \
 	BIT(WRITE_GATE,             "Enable write"                                      ) \
 	BIT(READ_GATE,              "Enable read"                                       ) \
@@ -92,7 +83,7 @@ enum tag {
 	BIT(SERVO_OFFSET_NEGATIVE,  "Servo Offset Negative (250µin away from spindle)"  ) \
 	BIT(FAULT_CLEAR,            "Controller Fault Clear"                            ) \
 	BIT(ADDRESS_MARK_ENABLE,    "Enable Address Mark R/W"                           ) \
-	BIT(RTZ_SEEK,               "Return to Track Zero, Clear Error"                 ) \
+	BIT(RTZ,                    "Return to Track Zero, Clear Error"                 ) \
 	BIT(DATA_STROBE_EARLY,      "Data Strobe Early (PLO data separator)"            ) \
 	BIT(DATA_STROBE_LATE,       "Date Strobe Late (PLO data separator)"             ) \
 	BIT(RELEASE,                "Release (dual-channel only)"                       )
@@ -110,6 +101,13 @@ enum tag3bit {
 };
 
 #define MAX_DATA_BUFFER_SIZE ((3*DRIVE_BYTES_PER_TRACK) + (DRIVE_BYTES_PER_TRACK/20))
+
+enum adjustment {
+	MINUS   = -1,
+	NEUTRAL =  0,
+	PLUS    =  1,
+	ENTIRE_RANGE = 101,
+};
 
 #define CONTROLLER_PROTOCOL_H
 #endif

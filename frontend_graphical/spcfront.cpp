@@ -90,8 +90,8 @@ struct com_file {
 	int n_non_zero_bytes;
 };
 
+#define MAX_FREQUNCIES (4)
 struct com {
-	char** status_descriptor_arr;
 	struct cond ready_cond;
 
 	int fd;
@@ -104,6 +104,7 @@ struct com {
 	char** controller_log;
 	struct controller_status* controller_status_arr;
 	uint64_t controller_timestamp_us;
+	uint32_t frequencies[MAX_FREQUNCIES];
 
 	struct com_file file;
 
@@ -206,9 +207,10 @@ static int starts_with(char* s, const char* prefix)
 	return 1;
 }
 
-static int is_payload(char* s, const char* cppp)
+static int is_payload(char* s, const char* cppp, char** tail)
 {
 	size_t ncppp = strlen(cppp);
+	if (tail) *tail = s + ncppp;
 	return starts_with(s, cppp) && (s[ncppp] == ' ' || s[ncppp] == 0);
 }
 
@@ -249,42 +251,28 @@ static void bad_msg(char* msg)
 static void com__handle_msg(char* msg)
 {
 	struct com_file* comfile = &com.file;
+	char* tail = NULL;
 	if (starts_with(msg, CPPP_LOG)) {
 		printf("(CTRL) %s\n", msg);
 		msg = duplicate_string(msg);
 		pthread_rwlock_wrlock(&com.rwlock);
 		arrput(com.controller_log, msg);
 		pthread_rwlock_unlock(&com.rwlock);
-	} else if (is_payload(msg, CPPP_STATUS_DESCRIPTORS)) {
-		assert((com.status_descriptor_arr == NULL) && "seen twice? that's probably not thread-safe...");
-		char* p = msg + strlen(CPPP_STATUS_DESCRIPTORS);
-		for (;;) {
-			char c = *p;
-			if (c == 0) break;
-			assert(c == ' ');
-			p++;
-			char* p0 = p;
-			for (;;) {
-				char c2 = *(p++);
-				if (c2 == ' ' || c2 == 0) {
-					p--;
-					break;
-				}
+	} else if (is_payload(msg, CPPP_FREQ, &tail)) {
+		uint32_t num = 0, value = 0;
+		if (sscanf(tail, " %u %u", &num, &value) == 2) {
+			if (0 <= num && num < MAX_FREQUNCIES) {
+				com.frequencies[num] = value * FREQ_FREQ_HZ;
+			} else {
+				bad_msg(msg);
 			}
-			if (p > p0) {
-				const size_t n = (p-p0)+1;
-				char* ss = (char*)malloc(n);
-				memcpy(ss, p0, n-1);
-				ss[n-1] = 0;
-				arrput(com.status_descriptor_arr, ss);
-			}
-			cond_signal(&com.ready_cond);
+		} else {
+			bad_msg(msg);
 		}
-	} else if (is_payload(msg, CPPP_STATUS)) {
-		char* p = msg + strlen(CPPP_STATUS);
+	} else if (is_payload(msg, CPPP_STATUS, &tail)) {
 		int64_t timestamp_us = 0;
 		uint32_t status = 0;
-		if (sscanf(p, " %ld %u", &timestamp_us, &status) == 2) {
+		if (sscanf(tail, " %ld %u", &timestamp_us, &status) == 2) {
 			struct controller_status s;
 			s.timestamp_us = timestamp_us;
 			s.status = status;
@@ -300,21 +288,19 @@ static void com__handle_msg(char* msg)
 		} else {
 			bad_msg(msg);
 		}
-	} else if (is_payload(msg, CPPP_STATUS_TIME)) {
-		char* p = msg + strlen(CPPP_STATUS_TIME);
+	} else if (is_payload(msg, CPPP_TIME, &tail)) {
 		int64_t timestamp_us;
-		if (sscanf(p, " %ld", &timestamp_us) == 1) {
+		if (sscanf(tail, " %ld", &timestamp_us) == 1) {
 			pthread_rwlock_wrlock(&com.rwlock);
 			if (timestamp_us > com.controller_timestamp_us) com.controller_timestamp_us = timestamp_us;
 			pthread_rwlock_unlock(&com.rwlock);
 		} else {
 			bad_msg(msg);
 		}
-	} else if (is_payload(msg, CPPP_DATA_HEADER)) {
-		char* p = msg + strlen(CPPP_DATA_HEADER);
+	} else if (is_payload(msg, CPPP_DATA_HEADER, &tail)) {
 		int n_bytes = -1;
 		char filename[1<<10];
-		if (sscanf(p, " %d %s", &n_bytes, filename) == 2) {
+		if (sscanf(tail, " %d %s", &n_bytes, filename) == 2) {
 			assert(!comfile->in_use);
 			char other_filename[1<<11];
 			char* path = filename;
@@ -345,14 +331,13 @@ static void com__handle_msg(char* msg)
 		} else {
 			bad_msg(msg);
 		}
-	} else if (is_payload(msg, CPPP_DATA_LINE)) {
+	} else if (is_payload(msg, CPPP_DATA_LINE, &tail)) {
 		if (!comfile->in_use) {
 			com_printf("ERROR: out of sequence (not-in-use) data line [%s]", msg);
 		} else {
-			char* p = msg + strlen(CPPP_DATA_LINE);
 			int sequence = -1;
 			char b64[1<<10];
-			if (sscanf(p, " %d %s", &sequence, b64) == 2) {
+			if (sscanf(tail, " %d %s", &sequence, b64) == 2) {
 				if (sequence != comfile->sequence) {
 					com_printf("ERROR: out of sequence (expected %d, got %d) data line [%s]", comfile->sequence, sequence, msg);
 					end_com_file();
@@ -391,14 +376,13 @@ static void com__handle_msg(char* msg)
 				end_com_file();
 			}
 		}
-	} else if (is_payload(msg, CPPP_DATA_FOOTER)) {
-		char* p = msg + strlen(CPPP_DATA_FOOTER);
+	} else if (is_payload(msg, CPPP_DATA_FOOTER, &tail)) {
 		if (!comfile->in_use) {
 			com_printf("WARNING: out of sequence (not-in-use) footer [%s]", msg);
 		} else {
 			int sequence = -1;
 			uint32_t pico_checksum = 0;
-			if (sscanf(p, " %d %u", &sequence, &pico_checksum) == 2) {
+			if (sscanf(tail, " %d %u", &sequence, &pico_checksum) == 2) {
 				const uint32_t our_checksum = adler32_sum(&comfile->adler);
 				if (comfile->bytes_written != comfile->bytes_total) {
 					com_printf("ERROR: expected %zd bytes; only received %zd", comfile->bytes_total, comfile->bytes_written);
@@ -703,10 +687,6 @@ int main(int argc, char** argv)
 
 	bool previous_debug_led = false,     debug_led = false;
 	int previous_debug_control_pins = 0, debug_control_pins = 0;
-	int raw_tag_selected_index = 3;
-	int raw_tag1_cylinder = 0;
-	int raw_tag2_head = 0;
-	int raw_tag3_flags = 0;
 	int basic_selected_index = 0;
 	int basic_cylinder = 0;
 	bool basic_cylinder_allow_overflow = false;
@@ -756,11 +736,11 @@ int main(int argc, char** argv)
 		{
 			ImGui::Begin("LOOPBACK TEST");
 			if (ImGui::Button("Read 8k")) {
-				com_enqueue("op_read_data 2048 0 1");
+				com_enqueue("%s 2048 0 1", CMDSTR_op_read_data);
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Transmit Data")) {
-				com_enqueue("loopback_test 10000");
+				com_enqueue("%s 10000", CMDSTR_loopback_test);
 			}
 			ImGui::End();
 		}
@@ -803,7 +783,7 @@ int main(int argc, char** argv)
 
 			ImGui::SeparatorText("Read");
 			if (ImGui::Button("Read data (no checks)")) {
-				com_enqueue("op_read_data %d %d %d", MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
+				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
 			}
 
 			#ifdef TELEMETRY_LOG
@@ -830,20 +810,40 @@ int main(int argc, char** argv)
 		{ // controller status window
 			ImGui::Begin("Controller Status");
 			const int64_t now_us = com.controller_timestamp_us;
+
 			ImGui::Text("Uptime: %.1fs", (double)now_us * 1e-6);
+			int fi = 0;
+			const int FW = 160;
+			#define PIN(TYPE,NAME,GPN) \
+				if (TYPE==FREQ) { \
+					ImGui::SameLine(FW+fi*FW); \
+					ImGui::Text(#NAME ": %uhz", com.frequencies[fi++]); \
+				}
+			EMIT_PIN_CONFIG
+			#undef PIN
 
 			ImGui::SliderFloat("scale", &status_scope_scale, 1.0f, 60.0f, "%.1f seconds");
 
-			const int n_rows = arrlen(com.status_descriptor_arr);
+			#define MAX_NAMES (30)
+			const char* status_names[MAX_NAMES];
+
+			int n_status_names = 0;
+			#define PIN(TYPE,NAME,GPN)                              \
+				if (TYPE==STATUS) {                             \
+					status_names[n_status_names++] = #NAME; \
+				}
+			EMIT_PIN_CONFIG
+			#undef PIN
+
 			const int n_columns = 2;
 			if (ImGui::BeginTable("table", n_columns)) {
 				ImGui::TableSetupColumn("0", ImGuiTableColumnFlags_WidthStretch);
 				ImGui::TableSetupColumn("1", ImGuiTableColumnFlags_WidthFixed);
 				const struct controller_status* cs = com.controller_status_arr;
 				const int ncs = arrlen(cs);
-				for (int row = 0; row < n_rows; row++) {
+				for (int row = 0; row < n_status_names; row++) {
 					const unsigned mask = 1 << row;
-					const char* label = com.status_descriptor_arr[row];
+					const char* label = status_names[row];
 					ImU32 st0col = get_status_label_color(label, 0);
 					ImU32 st1col = get_status_label_color(label, 1);
 
@@ -947,7 +947,8 @@ int main(int argc, char** argv)
 				ImGui::InputInt("32bit Word Count", &common_32bit_word_count);
 				if (common_32bit_word_count < 0) common_32bit_word_count = 0;
 				if (ImGui::Button("Execute!")) {
-					com_enqueue("op_read_batch %d %d %d %d %d %d",
+					com_enqueue("%s %d %d %d %d %d %d",
+						CMDSTR_op_read_batch,
 						batch_cylinder0,
 						batch_cylinder1,
 						batch_head_set,
@@ -998,68 +999,25 @@ int main(int argc, char** argv)
 				if (ImGui::Button("Execute!")) {
 					switch (basic_selected_index) {
 					case 0: {
-						com_enqueue("op_select_unit0");
+						com_enqueue("%s", CMDSTR_op_select_unit0);
 					} break;
 					case 1: {
-						com_enqueue("op_select_cylinder %d", basic_cylinder);
+						com_enqueue("%s %d", CMDSTR_op_select_cylinder, basic_cylinder);
 					} break;
 					case 2: {
-						com_enqueue("op_select_head %d", basic_head);
+						com_enqueue("%s %d", CMDSTR_op_select_head, basic_head);
 					} break;
 					case 3: {
-						com_enqueue("op_read_enable %d %d", common_servo_offset, common_data_strobe_delay);
+						com_enqueue("%s %d %d", CMDSTR_op_read_enable, common_servo_offset, common_data_strobe_delay);
 					} break;
 					case 4: {
-						com_enqueue("op_read_data %d %d %d",
+						com_enqueue("%s %d %d %d",
+							CMDSTR_op_read_data,
 							common_32bit_word_count,
 							basic_index_sync?1:0,
 							basic_skip_checks?1:0);
 					} break;
 					}
-				}
-			}
-
-			if (ImGui::CollapsingHeader("Raw Tag")) {
-				const char* items[] = {
-					// same order as `enum tag`
-					"TAG_UNIT_SELECT",
-					"TAG1 (Cylinder)",
-					"TAG2 (Head)",
-					"TAG3 (Control)",
-				};
-				ImGui::Combo("##selected_raw_tag", &raw_tag_selected_index, items, IM_ARRAYSIZE(items));
-				const int MAX_ADDR = (1<<10)-1;
-				switch (raw_tag_selected_index) {
-				case TAG_UNIT_SELECT: {
-					ImGui::Text("(always selects unit 0)");
-				} break;
-				case TAG1: {
-					ImGui::InputInt("Cylinder##tag", &raw_tag1_cylinder);
-					if (raw_tag1_cylinder < 0) raw_tag1_cylinder = 0;
-					if (raw_tag1_cylinder > MAX_ADDR) raw_tag1_cylinder = MAX_ADDR;
-				} break;
-				case TAG2: {
-					ImGui::InputInt("Head##tag", &raw_tag2_head);
-					if (raw_tag2_head < 0) raw_tag2_head = 0;
-					if (raw_tag2_head > MAX_ADDR) raw_tag2_head = MAX_ADDR;
-				} break;
-				case TAG3: {
-					#define BIT(NAME,DESC) \
-						ImGui::CheckboxFlags(#NAME, &raw_tag3_flags, TAG3BIT_ ## NAME); \
-						ImGui::SetItemTooltip("%s", DESC);
-					EMIT_TAG3_BITS
-					#undef CONTROL
-				} break;
-				}
-
-				if (ImGui::Button("Execute!")) {
-					com_enqueue("op_raw_tag %d %d",
-						raw_tag_selected_index,
-						raw_tag_selected_index == TAG_UNIT_SELECT ? 0 :
-						raw_tag_selected_index == TAG1 ? raw_tag1_cylinder :
-						raw_tag_selected_index == TAG2 ? raw_tag2_head :
-						raw_tag_selected_index == TAG3 ? raw_tag3_flags :
-						0);
 				}
 			}
 
@@ -1092,26 +1050,26 @@ int main(int argc, char** argv)
 
 			if (ImGui::CollapsingHeader("Misc Debugging")) {
 				if (ImGui::Button("Execute Blink Test Job (Succeed)")) {
-					com_enqueue("op_blink_test 0");
+					com_enqueue("%s %d", CMDSTR_op_blink_test, 0);
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("(Fail)")) {
-					com_enqueue("op_blink_test 1");
+					com_enqueue("%s %d", CMDSTR_op_blink_test, 1);
 				}
 				if (ImGui::Button("Loopback Test (1000b)")) {
-					com_enqueue("loopback_test 1000");
+					com_enqueue("%s %d", CMDSTR_loopback_test, 1000);
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("(10000b)")) {
-					com_enqueue("loopback_test 10000");
+					com_enqueue("%s %d", CMDSTR_loopback_test, 10000);
 				}
 				ImGui::Checkbox("Poll all GPIO (see log output)", &poll_gpio);
 				if (ImGui::Button("Execute Data Download Test (1000b)")) {
-					com_enqueue("xfer_test 1000");
+					com_enqueue("%s %d", CMDSTR_xfer_test, 1000);
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("(10000b)")) {
-					com_enqueue("xfer_test 10000");
+					com_enqueue("%s %d", CMDSTR_xfer_test, 10000);
 				}
 				ImGui::Checkbox("Log status changes", &com.log_status_changes);
 			}
@@ -1120,23 +1078,19 @@ int main(int argc, char** argv)
 				{
 					push_danger_style();
 					if (ImGui::Button("TERMINATE OPERATION")) {
-						com_enqueue("terminate_op");
+						com_enqueue("%s", CMDSTR_terminate_op);
 					}
 					ImGui::SetItemTooltip("Terminates current drive operation on Pico and sets all control pins to zero");
 					pop_danger_style();
 				}
 
 				if (ImGui::Button("RTZ")) {
-					com_enqueue("op_rtz");
+					com_enqueue("%s %d", CMDSTR_op_tag3_strobe, TAG3BIT_RTZ);
 				}
 				ImGui::SetItemTooltip("Return to cylinder zero, clear fault");
 
 				if (ImGui::Button("Clear FAULT")) {
-					com_enqueue("op_raw_tag 3 %d", TAG3BIT_FAULT_CLEAR);
-				}
-
-				if (ImGui::Button("Clear Control (TAG3 with all zeroes)")) {
-					com_enqueue("op_raw_tag 3 0");
+					com_enqueue("%s %d", CMDSTR_op_tag3_strobe, TAG3BIT_FAULT_CLEAR);
 				}
 			}
 
@@ -1160,19 +1114,19 @@ int main(int argc, char** argv)
 		#endif
 
 		if (debug_control_pins != previous_debug_control_pins) {
-			com_enqueue("set_ctrl %d", debug_control_pins);
+			com_enqueue("%s %d", CMDSTR_set_ctrl, debug_control_pins);
 			previous_debug_control_pins = debug_control_pins;
 		}
 
 		if (debug_led != previous_debug_led) {
-			com_enqueue("led %d", debug_led?1:0);
+			com_enqueue("%s %d", CMDSTR_led, debug_led?1:0);
 			previous_debug_led = debug_led;
 		}
 
 		if (poll_gpio) {
 			uint32_t t = SDL_GetTicks();
 			if (t > (last_poll_gpio + 25)) {
-				com_enqueue("poll_gpio");
+				com_enqueue("%s", CMDSTR_poll_gpio);
 				last_poll_gpio = t;
 			}
 		}

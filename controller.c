@@ -19,53 +19,83 @@
 unsigned stdin_received_bytes;
 unsigned is_subscribing_to_status;
 struct command_parser command_parser;
-unsigned current_status;
-absolute_time_t last_status_timestamp;
 int is_job_polling;
 
 static inline int gpio_type_to_dir(enum gpio_type t)
 {
 	switch (t) {
 	case DATA:     return GPIO_IN;
+	case FREQ:     return GPIO_IN;
 	case STATUS:   return GPIO_IN;
 	case CONTROL:  return GPIO_OUT;
 	default: PANIC(PANIC_XXX);
 	}
 }
 
+#define MAX_FREQUENCY_PINS (4)
+unsigned frequency_counters[MAX_FREQUENCY_PINS];
+absolute_time_t last_frequency_tick_timestamp;
+
+absolute_time_t last_status_push_timestamp;
+unsigned pushed_status;
+int push_status_now;
+unsigned prev_gpio_all;
+
 static void status_housekeeping(void)
 {
-	const absolute_time_t t = get_absolute_time();
+	const absolute_time_t now = get_absolute_time();
+	const unsigned gpio_all = gpio_get_all();
+	const unsigned gpio_edge_set = gpio_all ^ prev_gpio_all;
+	prev_gpio_all = gpio_all;
 
-	{ // poll status pins
-		unsigned status = 0;
-		unsigned mask = 1;
-		#define PIN(TYPE,NAME,GPN) \
-			if (TYPE==STATUS) { \
-				if (gpio_get(GPN)) status |= mask; \
-				mask <<= 1; \
+	{ // handle frequent pins
+		int i = 0;
+		const int is_tick = (now - last_frequency_tick_timestamp) > FREQ_IN_MICROS(FREQ_FREQ_HZ);
+		#define PIN(TYPE,NAME,GPN)                       \
+			if (TYPE==FREQ) {                         \
+				if (i >= MAX_FREQUENCY_PINS) PANIC(PANIC_BOUNDS_CHECK_FAILED); \
+				if (gpio_edge_set & (1<<GPN)) {     \
+					frequency_counters[i]++;     \
+				}                                     \
+				if (is_tick) {                         \
+					if (is_subscribing_to_status) { \
+						printf("%s %d %d\n", CPPP_FREQ, i, frequency_counters[i]); \
+					}                                 \
+					frequency_counters[i] = 0;         \
+				}                                           \
+				i++;                                         \
 			}
 		EMIT_PIN_CONFIG
 		#undef PIN
-		// TODO FIXME: INDEX (60Hz) and SECTOR (~2kHz?) events should
-		// probably be sent as frequencies instead of individual edge
-		// events, but the rate limiting may still be a good idea (we
-		// see noisy inputs sometimes) to prevent stdout buffer
-		// overflows...
-		if ((status != current_status) && ((t - last_status_timestamp) > (1000000/200))) {
-			if (is_subscribing_to_status) {
-				printf("%s %llu %d\n", CPPP_STATUS, t, status);
-				last_status_timestamp = t;
-			}
-			current_status = status;
-		}
+		if (is_tick) last_frequency_tick_timestamp = now;
 	}
 
-	if ((t - last_status_timestamp) > (1000000/60)) {
+	unsigned status = 0;
+	{ // map status pins
+		unsigned mask = 1;
+		#define PIN(TYPE,NAME,GPN)                                    \
+			if (TYPE==STATUS) {                                   \
+				if (gpio_all & (1<<GPN)) { status |= mask; }  \
+				mask <<= 1;                                   \
+			}
+		EMIT_PIN_CONFIG
+		#undef PIN
+	}
+
+	if (push_status_now || (status != pushed_status && ((now - last_status_push_timestamp) > FREQ_IN_MICROS(200)))) {
 		if (is_subscribing_to_status) {
-			printf("%s %llu\n", CPPP_STATUS_TIME, t);
+			printf("%s %llu %d\n", CPPP_STATUS, now, status);
+			last_status_push_timestamp = now;
 		}
-		last_status_timestamp = t;
+		push_status_now = 0;
+		pushed_status = status;
+	} else if ((now - last_status_push_timestamp) > FREQ_IN_MICROS(60)) {
+		// report controller time once in a while if nothing else is
+		// happening...
+		if (is_subscribing_to_status) {
+			printf("%s %llu\n", CPPP_TIME, now);
+		}
+		last_status_push_timestamp = now;
 	}
 }
 
@@ -149,35 +179,26 @@ static void job_begin(void)
 	is_job_polling = 1;
 }
 
-static void parse(void)
+static int parse(void)
 {
 	int got_char = getchar_timeout_us(0);
+
 	if (got_char == PICO_ERROR_TIMEOUT || got_char == 0 || got_char >= 256) {
-		return;
+		return 0;
 	}
 
 	stdin_received_bytes++;
 	if (!command_parser_put_char(&command_parser, got_char)) {
-		return;
+		return 1; // "more please"
 	}
 
 	switch (command_parser.command) {
 	case COMMAND_led: {
 		set_led(command_parser.arguments[0].u);
 	} break;
-	case COMMAND_get_status_descriptors: {
-		printf(CPPP_STATUS_DESCRIPTORS);
-		#define PIN(TYPE, NAME, GPN) \
-			if (TYPE == STATUS) { \
-				printf(" %s", #NAME); \
-			}
-		EMIT_PIN_CONFIG
-		#undef PIN
-		printf("\n");
-	} break;
 	case COMMAND_subscribe_to_status: {
 		is_subscribing_to_status = command_parser.arguments[0].b;
-		current_status = -1;
+		push_status_now = 1;
 		printf(CPPP_DEBUG "status subscription = %d\n", is_subscribing_to_status);
 	} break;
 	case COMMAND_poll_gpio: {
@@ -240,15 +261,10 @@ static void parse(void)
 		job_begin();
 		xop_blink_test(fail);
 	} break;
-	case COMMAND_op_raw_tag: {
-		const unsigned tag      = command_parser.arguments[0].u;
-		const unsigned argument = command_parser.arguments[1].u;
+	case COMMAND_op_tag3_strobe: {
 		job_begin();
-		xop_raw_tag(tag, argument);
-	} break;
-	case COMMAND_op_rtz: {
-		job_begin();
-		xop_rtz();
+		const int ctrl = command_parser.arguments[0].u;
+		xop_tag3_strobe(ctrl);
 	} break;
 	case COMMAND_op_select_unit0: {
 		job_begin();
@@ -296,6 +312,7 @@ static void parse(void)
 			command_parser.command);
 	} break;
 	}
+	return 0;
 }
 
 int main()
@@ -323,13 +340,15 @@ int main()
 	blink(50, 0); // "Hi, we're up!"
 
 	for (;;) {
-		parse();
+		for (int i = 0; i < 50; i++) {
+			if (!parse()) break;
+		}
 		status_housekeeping();
 		handle_frontend_data_transfers();
 		handle_job_status();
 		loopback_test_tick();
 		//tight_loop_contents(); // does nothing
-		tud_task();
+		tud_task(); // tinyusb work
 	}
 
 	PANIC(PANIC_STOP);

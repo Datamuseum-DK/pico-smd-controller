@@ -17,6 +17,8 @@
 
 #define  LED_PIN  PICO_DEFAULT_LED_PIN // GP25
 
+#define FREQ_IN_MICROS(HZ) (1000000/(HZ))
+
 void set_led(int p);
 void blink(int on_ms, int off_ms);
 

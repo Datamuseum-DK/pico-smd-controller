@@ -6,15 +6,6 @@
 // anything else to use core1 for? (all the high bandwidth heavy lifting is
 // entirely handled by PIO/DMA)
 
-// FIXME there are probably some bad assumptions in here regarding "tagging";
-// it would appear that UNIT_SELECT_TAG must be held high during drive
-// operations (I thought a 0->1->0 pulse would do the trick, but that's
-// probably a misconception). Similarly it might be the case that e.g.
-// TAG3+BIT1 must be held high during the entire read operation, and not just
-// as a pulse preceeding the read. (at the time of writing we're only flipping
-// output bits manually and seeing how the drive responds, so all this code is
-// mostly unused)
-
 #include <stdio.h>
 #include "pico/multicore.h"
 
@@ -45,6 +36,11 @@ absolute_time_t job_begin_time_us;
 absolute_time_t job_duration_us;
 volatile enum xop_status status;
 
+static void unit0_select_tag(void)
+{
+	gpio_put(GPIO_UNIT_SELECT_TAG, 1);
+}
+
 static void set_bits(unsigned value)
 {
 	#define PUT(N) gpio_put(GPIO_BIT ## N, value & (1<<N))
@@ -53,32 +49,46 @@ static void set_bits(unsigned value)
 	#undef PUT
 }
 
-static inline void set_tag(enum tag tag)
+static void clear_output(void)
 {
-	gpio_put(GPIO_UNIT_SELECT_TAG, tag == TAG_UNIT_SELECT);
-	gpio_put(GPIO_TAG1,            tag == TAG1);
-	gpio_put(GPIO_TAG2,            tag == TAG2);
-	gpio_put(GPIO_TAG3,            tag == TAG3);
+	gpio_put(GPIO_TAG1, 0);
+	gpio_put(GPIO_TAG2, 0);
+	gpio_put(GPIO_TAG3, 0);
+	set_bits(0);
 }
 
-static void tag_raw(enum tag tag, unsigned value)
+#define TAG_SLEEP_US (10)
+
+static void tag1_cylinder(unsigned cylinder)
 {
-	set_tag(TAG_CLEAR);
-	switch (tag) {
-	case TAG1: case TAG2: case TAG3:
-		set_bits(value);
-		break;
-	case TAG_UNIT_SELECT:
-		// NOTE: UNIT SELECT BIT 0-3 must be hardwired to zeroes. Here
-		// we assert that only unit 0 is selected.
-		if (value != 0) PANIC(PANIC_BOUNDS_CHECK_FAILED);
-		break;
-	default: PANIC(PANIC_XXX);
-	}
-	set_tag(tag);
-	TAG_STROBE_SLEEP();
-	set_tag(TAG_CLEAR);
-	set_bits(0);
+	clear_output();
+	set_bits(cylinder);
+	gpio_put(GPIO_TAG1, 1);
+	sleep_us(TAG_SLEEP_US);
+	clear_output();
+}
+
+static void tag2_head(unsigned head)
+{
+	clear_output();
+	set_bits(head);
+	gpio_put(GPIO_TAG2, 1);
+	sleep_us(TAG_SLEEP_US);
+	clear_output();
+}
+
+static void tag3_ctrl(unsigned ctrl)
+{
+	clear_output();
+	set_bits(ctrl);
+	gpio_put(GPIO_TAG3, 1);
+}
+
+static void tag3_ctrl_strobe(unsigned ctrl)
+{
+	tag3_ctrl(ctrl);
+	sleep_us(TAG_SLEEP_US);
+	clear_output();
 }
 
 static void BEGIN(void)
@@ -142,37 +152,17 @@ static void pin_wait_for_zero(unsigned gpio, unsigned timeout_us, int check_erro
 	pin_wait(gpio, 0, timeout_us, check_error);
 }
 
-static void control_clear(void)
-{
-	tag_raw(TAG3, 0);
-}
-
 static void select_unit0(void)
 {
-	tag_raw(TAG_UNIT_SELECT, 0);
+	unit0_select_tag();
 	pin_wait_for_one(GPIO_UNIT_SELECTED, 100000, 0);
 	check_drive_error();
-}
-
-static void select_unit0_if_not_selected(void)
-{
-	if (!gpio_get(GPIO_UNIT_SELECTED)) {
-		select_unit0();
-	}
-}
-
-static void rtz_seek(void)
-{
-	check_drive_error();
-	tag_raw(TAG3, TAG3BIT_RTZ_SEEK);
-	sleep_us(1000);
-	control_clear();
 }
 
 static void read_enable_ex(int servo_offset, int data_strobe_delay)
 {
 	check_drive_error();
-	const unsigned bits = TAG3BIT_READ_GATE
+	const unsigned ctrl = TAG3BIT_READ_GATE
 
 		| (servo_offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
 		:  servo_offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
@@ -182,19 +172,13 @@ static void read_enable_ex(int servo_offset, int data_strobe_delay)
 		:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
 		: 0);
 
-	tag_raw(TAG3, bits);
-}
-
-static void tag_select_cylinder(unsigned cylinder)
-{
-	check_drive_error();
-	tag_raw(TAG1, cylinder & ((1<<10)-1));
+	tag3_ctrl(ctrl);
 }
 
 static void select_cylinder(unsigned cylinder)
 {
 	check_drive_error();
-	tag_select_cylinder(cylinder);
+	tag1_cylinder(cylinder);
 	// Assuming it might take a little while before ON_CYLINDER and
 	// SEEK_END go low?
 	sleep_us(1000);
@@ -207,30 +191,18 @@ static void select_cylinder(unsigned cylinder)
 	pin_mask_wait(bits, bits, 1000000, 1);
 }
 
-static void tag_select_head(unsigned head)
-{
-	check_drive_error();
-	tag_raw(TAG2, head & ((1<<3)-1));
-}
-
 static void select_head(unsigned head)
 {
 	check_drive_error();
-	tag_select_head(head);
-	// a Christian Rovsing manual ("CR8044M DISK CONTROLLER PRODUCT
-	// SPECIFICATION", section 3.1.1.3) says they have 32/33 sectors per
-	// track, but the last one is a dummy sector and is only "about a
-	// thirteenth of each of the other sectors and is used as a space for
-	// head change.". So sleep for a thirteenth of a sector:
-	sleep_us(((1000000 / DRIVE_RPS) / 32) / 13); // ~40µs
+	tag2_head(head);
 }
 
 static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
 	if (!skip_checks) check_drive_error();
 	if (index_sync) {
-		pin_wait_for_zero(GPIO_INDEX, (1000000 / DRIVE_RPS) / 10, !skip_checks);
-		pin_wait_for_one(GPIO_INDEX, (1000000 / (DRIVE_RPS/3)), !skip_checks); // wait at most 3 revolutions
+		pin_wait_for_zero(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS)/10, !skip_checks);
+		pin_wait_for_one(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS/3), !skip_checks); // wait at most 3 revolutions
 	}
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {
@@ -251,10 +223,15 @@ static void read_data_normal(unsigned buffer_index, unsigned n_32bit_words)
 static inline void reset(void)
 {
 	multicore_reset_core1(); // waits until core1 is down
-	sleep_us(1);
-	set_tag(TAG_CLEAR);
-	set_bits(0);
 }
+
+static inline void reset_and_kill_output(void)
+{
+	reset();
+	sleep_us(1);
+	clear_output();
+}
+
 
 static void run(void(*fn)(void))
 {
@@ -274,7 +251,7 @@ absolute_time_t xop_duration_us(void)
 
 void terminate_op(void)
 {
-	reset();
+	reset_and_kill_output();
 }
 
 union {
@@ -282,15 +259,14 @@ union {
 		int fail;
 	} blink_test;
 	struct {
-		unsigned tag;
-		unsigned argument;
-	} raw_tag;
-	struct {
 		unsigned cylinder;
 	} select_cylinder;
 	struct {
 		unsigned head;
 	} select_head;
+	struct {
+		unsigned ctrl;
+	} tag3_strobe;
 	struct {
 		int servo_offset;
 		int data_strobe_delay;
@@ -338,23 +314,6 @@ void xop_blink_test(int fail)
 
 
 ////////////////////////////////////
-// raw tag /////////////////////////
-void job_raw_tag(void)
-{
-	BEGIN();
-	tag_raw(job_args.raw_tag.tag, job_args.raw_tag.argument);
-	DONE();
-}
-void xop_raw_tag(enum tag tag, unsigned argument)
-{
-	reset();
-	job_args.raw_tag.tag = tag;
-	job_args.raw_tag.argument = argument;
-	run(job_raw_tag);
-}
-
-
-////////////////////////////////////
 // select unit 0 ///////////////////
 void job_select_unit0(void)
 {
@@ -364,39 +323,37 @@ void job_select_unit0(void)
 }
 void xop_select_unit0(void)
 {
-	reset();
+	reset_and_kill_output();
 	run(job_select_unit0);
 }
 
 
 /////////////////////////////////////////////////////////////////////////////
-// rtz / return to track zero ///////////////////////////////////////////////
-void job_rtz(void)
+// tag3 / short strobe //////////////////////////////////////////////////////
+void job_tag3_strobe(void)
 {
 	BEGIN();
-	select_unit0_if_not_selected();
-	rtz_seek();
+	tag3_ctrl_strobe(job_args.tag3_strobe.ctrl);
 	DONE();
 }
-void xop_rtz(void)
+void xop_tag3_strobe(unsigned ctrl)
 {
-	reset();
-	run(job_rtz);
+	reset_and_kill_output();
+	job_args.tag3_strobe.ctrl = ctrl;
+	run(job_tag3_strobe);
 }
-
 
 /////////////////////////////////////////////////////////////////////////////
 // select cylinder //////////////////////////////////////////////////////////
 void job_select_cylinder(void)
 {
 	BEGIN();
-	select_unit0_if_not_selected();
 	select_cylinder(job_args.select_cylinder.cylinder);
 	DONE();
 }
 void xop_select_cylinder(unsigned cylinder)
 {
-	reset();
+	reset_and_kill_output();
 	job_args.select_cylinder.cylinder = cylinder;
 	run(job_select_cylinder);
 }
@@ -407,13 +364,12 @@ void xop_select_cylinder(unsigned cylinder)
 void job_select_head(void)
 {
 	BEGIN();
-	select_unit0_if_not_selected();
 	select_head(job_args.select_head.head);
 	DONE();
 }
 void xop_select_head(unsigned head)
 {
-	reset();
+	reset_and_kill_output();
 	job_args.select_head.head = head;
 	run(job_select_head);
 }
@@ -423,7 +379,6 @@ void xop_select_head(unsigned head)
 void job_read_enable(void)
 {
 	BEGIN();
-	select_unit0_if_not_selected();
 	read_enable_ex(
 		job_args.read_enable.servo_offset,
 		job_args.read_enable.data_strobe_delay);
@@ -431,7 +386,7 @@ void job_read_enable(void)
 }
 void xop_read_enable(int servo_offset, int data_strobe_delay)
 {
-	reset();
+	reset_and_kill_output();
 	job_args.read_enable.servo_offset = servo_offset;
 	job_args.read_enable.data_strobe_delay = data_strobe_delay;
 	run(job_read_enable);
@@ -443,9 +398,6 @@ unsigned next_read_data_serial = 1;
 void job_read_data(void)
 {
 	BEGIN();
-	if (!job_args.read_data.skip_checks) {
-		select_unit0_if_not_selected();
-	}
 	const unsigned buffer_index = job_args.read_data.buffer_index;
 	snprintf(
 		get_buffer_filename(buffer_index),
@@ -477,14 +429,25 @@ unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned ski
 void job_batch_read(void)
 {
 	BEGIN();
-	select_unit0_if_not_selected();
 	check_drive_error();
 	const unsigned cylinder0 = job_args.batch_read.cylinder0;
 	const unsigned cylinder1 = job_args.batch_read.cylinder1;
 	const unsigned head_set = job_args.batch_read.head_set;
 	const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
-	const int servo_offset = job_args.batch_read.servo_offset;
-	const int data_strobe_delay = job_args.batch_read.data_strobe_delay;
+	const int arg_servo_offset = job_args.batch_read.servo_offset;
+	const int arg_data_strobe_delay = job_args.batch_read.data_strobe_delay;
+
+	int servo_offset0 = arg_servo_offset == ENTIRE_RANGE ? -1 : arg_servo_offset;
+	if (servo_offset0 < -1) servo_offset0 = -1;
+
+	int servo_offset1 = arg_servo_offset == ENTIRE_RANGE ?  1 : arg_servo_offset;
+	if (servo_offset1 >  1) servo_offset1 = 1;
+
+	int data_strobe_delay0 = arg_data_strobe_delay == ENTIRE_RANGE ? -1 : arg_data_strobe_delay;
+	if (data_strobe_delay0 < -1) data_strobe_delay0 = -1;
+
+	int data_strobe_delay1 = arg_data_strobe_delay == ENTIRE_RANGE ?  1 : arg_data_strobe_delay;
+	if (data_strobe_delay1 > 1) data_strobe_delay1 = 1;
 
 	for (unsigned cylinder = cylinder0; cylinder <= cylinder1; cylinder++) {
 		select_cylinder(cylinder);
@@ -496,11 +459,11 @@ void job_batch_read(void)
 		//   "This fault is generated if the drive is in an Off
 		//   Cylinder condition and it receives a Read or Write gate
 		//   from the controller."
-		read_enable_ex(servo_offset, data_strobe_delay);
 		unsigned mask = 1;
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
 			if ((head_set & mask) == 0) continue;
 			select_head(head);
+			// XXX not sure if a delay is required here?
 			const absolute_time_t t0 = get_absolute_time();
 			while (!can_allocate_buffer()) {
 				if ((get_absolute_time() - t0) > 10000000) {
@@ -509,24 +472,40 @@ void job_batch_read(void)
 				sleep_us(5);
 			}
 			const unsigned buffer_index = allocate_buffer(n_32bit_words_per_track);
-			snprintf(
-				get_buffer_filename(buffer_index),
-				CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-				"cylinder%.4d-head%d.nrz", cylinder, head);
-			read_data(
-				// XXX combine these 2? I don't like the redundancy
-				allocate_buffer(n_32bit_words_per_track),
-				n_32bit_words_per_track,
-				/*index_sync=*/1,
-				/*skip_checks=*/0);
+			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
+				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
+					snprintf(
+						get_buffer_filename(buffer_index),
+						CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
+						//"cylinder%.4d-head%d-servo-%s-strobe-%s.nrz", cylinder, head, servo_offset+1, data_strobe_delay+1);
+						"cylinder%.4d-head%d%s%s.nrz", cylinder, head,
+
+						servo_offset == -1 ? "-servo-negative" :
+						servo_offset ==  1 ? "-servo-positive" :
+						""
+						,
+						data_strobe_delay == -1 ? "-strobe-early" :
+						data_strobe_delay ==  1 ? "-strobe-late" :
+						""
+					);
+
+					read_enable_ex(servo_offset, data_strobe_delay);
+					read_data(
+						// XXX combine these 2? I don't like the redundancy
+						allocate_buffer(n_32bit_words_per_track),
+						n_32bit_words_per_track,
+						/*index_sync=*/1,
+						/*skip_checks=*/0);
+					clear_output();
+				}
+			}
 		}
-		control_clear();
 	}
 	DONE();
 }
 void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, unsigned n_32bit_words_per_track, int servo_offset, int data_strobe_delay)
 {
-	reset();
+	reset_and_kill_output();
 	job_args.batch_read.n_32bit_words_per_track = n_32bit_words_per_track;
 	job_args.batch_read.cylinder0 = cylinder0;
 	job_args.batch_read.cylinder1 = cylinder1;
