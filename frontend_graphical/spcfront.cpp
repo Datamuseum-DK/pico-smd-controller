@@ -92,8 +92,6 @@ struct com_file {
 
 #define MAX_FREQUNCIES (4)
 struct com {
-	struct cond ready_cond;
-
 	int fd;
 	char* tty_path;
 	char* recv_line_arr;
@@ -552,16 +550,12 @@ static void com_startup(char* tty_path)
 		tcsetattr(com.fd, TCSANOW, &t);
 	}
 
-	cond_init(&com.ready_cond);
-
 	pthread_mutex_init(&com.queue_mutex, NULL);
 	pthread_t io_thread;
 	assert(pthread_create(&io_thread, NULL, io_thread_start, NULL) == 0);
 
 	assert(pthread_rwlock_init(&com.rwlock, NULL) == 0);
 
-	printf("COM: waiting for handshake...\n");
-	cond_wait_nonzero(&com.ready_cond);
 	printf("COM: ready!\n");
 }
 
