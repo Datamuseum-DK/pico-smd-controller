@@ -137,7 +137,6 @@ static void try_parse(const char* line, enum command expected_command)
 int main(int argc, char** argv)
 {
 	reset_parser(&command_parser);
-	try_parse("get_status_descriptors\r\n", COMMAND_get_status_descriptors);
 	try_parse("led 0\n", COMMAND_led);
 	assert(!command_parser.arguments[0].b);
 	try_parse("led 1\n", COMMAND_led);
@@ -149,7 +148,6 @@ int main(int argc, char** argv)
 	assert(command_parser.arguments[0].b);
 	try_parse("led 420\n\n", COMMAND_led);
 	assert(command_parser.arguments[0].b);
-	try_parse("get_status_descriptors\n", COMMAND_get_status_descriptors);
 	try_parse("subscribe_to_status 424242\n", COMMAND_subscribe_to_status);
 	assert(command_parser.arguments[0].b);
 	try_parse("op_read_enable -42 66\n", COMMAND_op_read_enable);

@@ -470,7 +470,6 @@ void* io_thread_start(void* arg)
 
 	struct timeval timeout = {0};
 
-	com_enqueue("%s", CMDSTR_get_status_descriptors);
 	com_enqueue("%s 1", CMDSTR_subscribe_to_status);
 
 	for (;;) {
