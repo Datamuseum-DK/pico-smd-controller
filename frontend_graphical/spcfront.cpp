@@ -774,6 +774,14 @@ int main(int argc, char** argv)
 				debug_led = 0;
 			}
 
+			const int bits_shift = 8; // hehe
+			int tmp_bits = debug_control_pins >> bits_shift;
+			ImGui::Text("Bits:");
+			ImGui::SameLine();
+			ImGui::InputInt("##bits value", &tmp_bits);
+			tmp_bits &= ((1<<10)-1);
+			debug_control_pins = (debug_control_pins & ((1<<bits_shift)-1)) | (tmp_bits << bits_shift);
+
 			ImGui::SeparatorText("Read");
 			if (ImGui::Button("Read data (no checks)")) {
 				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
