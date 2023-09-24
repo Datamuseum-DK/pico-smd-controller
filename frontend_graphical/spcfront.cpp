@@ -777,7 +777,7 @@ int main(int argc, char** argv)
 			const int bits_shift = 8; // hehe
 			int tmp_bits = debug_control_pins >> bits_shift;
 			ImGui::Text("Bits:");
-			ImGui::SameLine();
+			ImGui::SetNextItemWidth(150);
 			ImGui::InputInt("##bits value", &tmp_bits);
 			tmp_bits &= ((1<<10)-1);
 			debug_control_pins = (debug_control_pins & ((1<<bits_shift)-1)) | (tmp_bits << bits_shift);
