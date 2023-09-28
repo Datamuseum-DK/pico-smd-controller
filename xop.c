@@ -492,7 +492,7 @@ void job_batch_read(void)
 					read_enable_ex(servo_offset, data_strobe_delay);
 					read_data(
 						// XXX combine these 2? I don't like the redundancy
-						allocate_buffer(n_32bit_words_per_track),
+						buffer_index,
 						n_32bit_words_per_track,
 						/*index_sync=*/1,
 						/*skip_checks=*/0);
