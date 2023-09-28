@@ -786,6 +786,18 @@ int main(int argc, char** argv)
 			if (ImGui::Button("Read data (no checks)")) {
 				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
 			}
+			ImGui::SameLine();
+			if (ImGui::Button("Proper Batch Read")) {
+				com_enqueue("%s %d %d %d %d %d %d",
+					CMDSTR_op_read_batch,
+					0,
+					DRIVE_CYLINDER_COUNT-1,
+					((1 << DRIVE_HEAD_COUNT)-1),
+					MAX_DATA_BUFFER_SIZE,
+					0 , //or: ENTIRE_RANGE,
+					0); //or: ENTIRE_RANGE);
+
+			}
 
 			#ifdef TELEMETRY_LOG
 			ImGui::SeparatorText("Write to telemetry.log");
