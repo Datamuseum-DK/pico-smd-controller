@@ -6,16 +6,7 @@
 #include "drive.h"
 #include "controller_protocol.h"
 
-// triple buffering, 3.05 revolutions per buffer
-// 20160*3.05   =  61488 bytes (15372 32-bit words)
-// 20160*3.05*3 = 184464 bytes
-#define CLOCKED_READ_BUFFER_COUNT   3
-// NOTE: I don't think triple buffering really makes a difference, but it might
-// with improved downlink speeds (raw USB instead of USB/TTY?):
-//   USB/TTY speed:   ~500kB/s; ~375kB/s after base64 enc; 3Mbit/s
-//   Drive:            NRZ signal at 9.67MHz
-//   1 Revolution:     16.67ms (3600RPM)
-
+#define CLOCKED_READ_BUFFER_COUNT   2
 #define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (64)
 
 void clocked_read_init(PIO pio, uint dma_channel);

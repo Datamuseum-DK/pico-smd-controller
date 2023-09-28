@@ -99,7 +99,7 @@ enum tag3bit {
 	#undef BIT
 };
 
-#define MAX_DATA_BUFFER_SIZE ((3*DRIVE_BYTES_PER_TRACK) + (DRIVE_BYTES_PER_TRACK/20))
+#define MAX_DATA_BUFFER_SIZE ((5*DRIVE_BYTES_PER_TRACK) + (DRIVE_BYTES_PER_TRACK/20))
 
 enum adjustment {
 	MINUS   = -1,
