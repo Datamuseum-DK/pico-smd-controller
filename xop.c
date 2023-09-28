@@ -63,6 +63,7 @@ static void tag1_cylinder(unsigned cylinder)
 {
 	clear_output();
 	set_bits(cylinder);
+	sleep_us(TAG_SLEEP_US);
 	gpio_put(GPIO_TAG1, 1);
 	sleep_us(TAG_SLEEP_US);
 	clear_output();
@@ -81,6 +82,7 @@ static void tag3_ctrl(unsigned ctrl)
 {
 	clear_output();
 	set_bits(ctrl);
+	sleep_us(TAG_SLEEP_US);
 	gpio_put(GPIO_TAG3, 1);
 }
 
@@ -162,7 +164,9 @@ static void select_unit0(void)
 static void read_enable_ex(int servo_offset, int data_strobe_delay)
 {
 	check_drive_error();
-	const unsigned ctrl = TAG3BIT_READ_GATE
+	const unsigned ctrl =
+
+		TAG3BIT_READ_GATE
 
 		| (servo_offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
 		:  servo_offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
@@ -177,7 +181,6 @@ static void read_enable_ex(int servo_offset, int data_strobe_delay)
 
 static void select_cylinder(unsigned cylinder)
 {
-	check_drive_error();
 	tag1_cylinder(cylinder);
 	// Assuming it might take a little while before ON_CYLINDER and
 	// SEEK_END go low?
@@ -201,8 +204,10 @@ static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsi
 {
 	if (!skip_checks) check_drive_error();
 	if (index_sync) {
-		pin_wait_for_zero(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS)/10, !skip_checks);
-		pin_wait_for_one(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS/3), !skip_checks); // wait at most 3 revolutions
+		//pin_wait_for_zero(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS)/10, !skip_checks);
+		//pin_wait_for_one(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS/3), !skip_checks); // wait at most 3 revolutions
+		pin_wait_for_zero(GPIO_INDEX, 1000000, !skip_checks);
+		pin_wait_for_one(GPIO_INDEX,  1000000, !skip_checks);
 	}
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {
@@ -463,7 +468,9 @@ void job_batch_read(void)
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
 			if ((head_set & mask) == 0) continue;
 			select_head(head);
+			check_drive_error();
 			// XXX not sure if a delay is required here?
+			sleep_us(5);
 			const absolute_time_t t0 = get_absolute_time();
 			while (!can_allocate_buffer()) {
 				if ((get_absolute_time() - t0) > 10000000) {
