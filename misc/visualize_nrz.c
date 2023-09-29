@@ -12,8 +12,8 @@
 
 int main(int argc, char** argv)
 {
-	if (argc != 2) {
-		fprintf(stderr, "Usage: %s <path/to/file.nrz>\n", argv[0]);
+	if (argc != 3) {
+		fprintf(stderr, "Usage: %s <path/to/file.nrz> <path/to/out.png>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -69,8 +69,8 @@ int main(int argc, char** argv)
 		}
 	}
 
-	printf("writing out.png...\n");
-	stbi_write_png("out.png", width, height, bpp, bitmap, bpp*width);
+	printf("writing %s.png...\n", argv[2]);
+	stbi_write_png(argv[2], width, height, bpp, bitmap, bpp*width);
 
 	return EXIT_SUCCESS;
 }
