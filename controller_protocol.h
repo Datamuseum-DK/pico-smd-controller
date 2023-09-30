@@ -21,10 +21,12 @@
 	COMMAND(xfer_test,                "u"        ) \
 	COMMAND(loopback_test,            "u"        ) \
 	COMMAND(terminate_op,             ""         ) \
+	COMMAND(op_reset,                 ""         ) \
 	COMMAND(op_blink_test,            "u"        ) \
 	COMMAND(op_select_unit0,          ""         ) \
 	COMMAND(op_tag3_strobe,           "u"        ) \
 	COMMAND(op_select_cylinder,       "u"        ) \
+	COMMAND(op_broken_seek,           "u"        ) \
 	COMMAND(op_select_head,           "u"        ) \
 	COMMAND(op_read_enable,           "ii"       ) \
 	COMMAND(op_read_data,             "uuu"      ) \

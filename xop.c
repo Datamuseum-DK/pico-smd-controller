@@ -35,6 +35,7 @@
 absolute_time_t job_begin_time_us;
 absolute_time_t job_duration_us;
 volatile enum xop_status status;
+unsigned current_cylinder_according_to_the_controller;
 
 static void unit0_select_tag(void)
 {
@@ -67,6 +68,7 @@ static void tag1_cylinder(unsigned cylinder)
 	gpio_put(GPIO_TAG1, 1);
 	sleep_us(TAG_SLEEP_US);
 	clear_output();
+	// NOTE: does not set current_cylinder_according_to_the_controller
 }
 
 static void tag2_head(unsigned head)
@@ -154,6 +156,20 @@ static void pin_wait_for_zero(unsigned gpio, unsigned timeout_us, int check_erro
 	pin_wait(gpio, 0, timeout_us, check_error);
 }
 
+static void return_to_normal(void)
+{
+	current_cylinder_according_to_the_controller = 0;
+
+	if ((gpio_get_all() & (1 << GPIO_FAULT))) {
+		tag3_ctrl_strobe(TAG3BIT_FAULT_CLEAR);
+		pin_wait_for_zero(GPIO_FAULT, 1000000, 0);
+	}
+
+	tag3_ctrl(TAG3BIT_RTZ);
+	sleep_us(500000);
+	clear_output();
+}
+
 static void select_unit0(void)
 {
 	unit0_select_tag();
@@ -192,6 +208,27 @@ static void select_cylinder(unsigned cylinder)
 	// SEEK ERROR" suggesting it's a simple OR-gate of those signals. But
 	// it's a good sanity check nevertheless (cable/drive may be broken).
 	pin_mask_wait(bits, bits, 1000000, 1);
+	current_cylinder_according_to_the_controller = cylinder;
+}
+
+// seek in single-cylinder steps; the drive divides seeking into two phases:
+// coarse seek (acceleration, coasting, deacceleration) and fine seek. as far
+// as we can tell from the schematics, single-stepping skips coarse seeking
+// entirely. so because coarse seeking both takes up a significant fraction of
+// the ICs, and also because it is finicky (subject to a lot of tuning), there
+// are a lot of things that can go wrong with it. in "real-life" we had a drive
+// that could only single-step.
+static void broken_seek(unsigned cylinder)
+{
+	for (;;) {
+		if (cylinder > current_cylinder_according_to_the_controller) {
+			select_cylinder(current_cylinder_according_to_the_controller + 1);
+		} else if (cylinder < current_cylinder_according_to_the_controller) {
+			select_cylinder(current_cylinder_according_to_the_controller - 1);
+		} else {
+			break;
+		}
+	}
 }
 
 static void select_head(unsigned head)
@@ -267,6 +304,9 @@ union {
 		unsigned cylinder;
 	} select_cylinder;
 	struct {
+		unsigned cylinder;
+	} broken_seek;
+	struct {
 		unsigned head;
 	} select_head;
 	struct {
@@ -292,6 +332,20 @@ union {
 	} batch_read;
 
 } job_args;
+
+////////////////////////////////////
+// reset ///////////////////////////
+void job_reset(void)
+{
+	BEGIN();
+	return_to_normal();
+	DONE();
+}
+void xop_reset(void)
+{
+	reset();
+	run(job_reset);
+}
 
 ////////////////////////////////////
 // blink test //////////////////////
@@ -353,16 +407,31 @@ void xop_tag3_strobe(unsigned ctrl)
 void job_select_cylinder(void)
 {
 	BEGIN();
-	select_cylinder(job_args.select_cylinder.cylinder);
+	select_cylinder(job_args.broken_seek.cylinder);
 	DONE();
 }
 void xop_select_cylinder(unsigned cylinder)
 {
 	reset_and_kill_output();
-	job_args.select_cylinder.cylinder = cylinder;
+	job_args.broken_seek.cylinder = cylinder;
 	run(job_select_cylinder);
 }
 
+
+/////////////////////////////////////////////////////////////////////////////
+// "broken seek" ////////////////////////////////////////////////////////////
+void job_broken_seek(void)
+{
+	BEGIN();
+	broken_seek(job_args.broken_seek.cylinder);
+	DONE();
+}
+void xop_broken_seek(unsigned cylinder)
+{
+	reset_and_kill_output();
+	job_args.broken_seek.cylinder = cylinder;
+	run(job_broken_seek);
+}
 
 /////////////////////////////////////////////////////////////////////////////
 // select head //////////////////////////////////////////////////////////////

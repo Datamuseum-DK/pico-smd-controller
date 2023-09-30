@@ -256,6 +256,10 @@ static int parse(void)
 		terminate_op();
 		printf(CPPP_INFO "TERMINATE!\n");
 	} break;
+	case COMMAND_op_reset: {
+		job_begin();
+		xop_reset();
+	} break;
 	case COMMAND_op_blink_test: {
 		const int fail = command_parser.arguments[0].u;
 		job_begin();
@@ -273,6 +277,10 @@ static int parse(void)
 	case COMMAND_op_select_cylinder: {
 		job_begin();
 		xop_select_cylinder(command_parser.arguments[0].u);
+	} break;
+	case COMMAND_op_broken_seek: {
+		job_begin();
+		xop_broken_seek(command_parser.arguments[0].u);
 	} break;
 	case COMMAND_op_select_head: {
 		job_begin();

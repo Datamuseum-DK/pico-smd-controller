@@ -799,6 +799,11 @@ int main(int argc, char** argv)
 
 			}
 
+			if (ImGui::Button("Reset")) {
+				com_enqueue("%s", CMDSTR_op_reset);
+			}
+			ImGui::SetItemTooltip("Clears cylinder register; clears FAULT; executes a RTZ");
+
 			#ifdef TELEMETRY_LOG
 			ImGui::SeparatorText("Write to telemetry.log");
 			static char telemtry_log_message[1<<10] = "";

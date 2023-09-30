@@ -17,10 +17,12 @@ enum xop_status poll_xop_status(void);
 absolute_time_t xop_duration_us(void);
 void terminate_op(void);
 
+void xop_reset(void);
 void xop_blink_test(int fail);
 void xop_tag3_strobe(unsigned ctrl);
 void xop_select_unit0(void);
 void xop_select_cylinder(unsigned cylinder);
+void xop_broken_seek(unsigned cylinder);
 void xop_select_head(unsigned head);
 void xop_read_enable(int servo_offset, int data_strobe_delay);
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned raw);
