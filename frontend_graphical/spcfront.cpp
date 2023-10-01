@@ -694,6 +694,7 @@ int main(int argc, char** argv)
 	int common_data_strobe_delay = 0;
 	bool poll_gpio = false;
 	uint32_t last_poll_gpio = 0;
+	int broken_seek_cylinder = 0;
 
 	int max_status_txt_width = 0;
 
@@ -782,7 +783,7 @@ int main(int argc, char** argv)
 			tmp_bits &= ((1<<10)-1);
 			debug_control_pins = (debug_control_pins & ((1<<bits_shift)-1)) | (tmp_bits << bits_shift);
 
-			ImGui::SeparatorText("Read");
+			ImGui::SeparatorText("Ops");
 			if (ImGui::Button("Read data (no checks)")) {
 				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
 			}
@@ -799,10 +800,19 @@ int main(int argc, char** argv)
 
 			}
 
+			ImGui::SameLine();
 			if (ImGui::Button("Reset")) {
 				com_enqueue("%s", CMDSTR_op_reset);
 			}
 			ImGui::SetItemTooltip("Clears cylinder register; clears FAULT; executes a RTZ");
+
+			ImGui::InputInt("##broken seek", &broken_seek_cylinder);
+			if (broken_seek_cylinder < 0) broken_seek_cylinder = 0;
+			if (broken_seek_cylinder >= DRIVE_CYLINDER_COUNT) broken_seek_cylinder = DRIVE_CYLINDER_COUNT-1;
+			ImGui::SameLine();
+			if (ImGui::Button("Broken Seek")) {
+				com_enqueue("%s %d", CMDSTR_op_broken_seek, broken_seek_cylinder);
+			}
 
 			#ifdef TELEMETRY_LOG
 			ImGui::SeparatorText("Write to telemetry.log");
