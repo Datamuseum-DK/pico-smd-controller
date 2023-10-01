@@ -25,6 +25,7 @@ static uint8_t* bits__init0_from_path(struct bits* bits, const char* path)
 {
 	memset(bits, 0, sizeof *bits);
 	FILE* f = fopen(path, "rb");
+	assert(f && "file not found");
 	assert(fseek(f, 0, SEEK_END) == 0);
 	const long n_bytes = ftell(f);
 	const int n_bits = bits->n = 8*n_bytes;
