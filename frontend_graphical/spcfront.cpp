@@ -105,6 +105,7 @@ struct com {
 	uint32_t frequencies[MAX_FREQUNCIES];
 
 	struct com_file file;
+	int file_serial;
 
 	bool log_status_changes = false;
 
@@ -404,6 +405,7 @@ static void com__handle_msg(char* msg)
 				} else {
 					telemetry_log("download done");
 				}
+				com.file_serial++;
 				comfile->in_use = 0;
 			} else {
 				bad_msg(msg);
@@ -695,6 +697,8 @@ int main(int argc, char** argv)
 	bool poll_gpio = false;
 	uint32_t last_poll_gpio = 0;
 	int broken_seek_cylinder = 0;
+	bool continuous_read = false;
+	int continuous_read_serial = 0;
 
 	int max_status_txt_width = 0;
 
@@ -787,6 +791,13 @@ int main(int argc, char** argv)
 			if (ImGui::Button("Read data (no checks)")) {
 				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
 			}
+			ImGui::SameLine();
+			ImGui::Checkbox("Continuous", &continuous_read);
+			if (com.file_serial > continuous_read_serial) {
+				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
+				continuous_read_serial = com.file_serial;
+			}
+
 			ImGui::SameLine();
 			if (ImGui::Button("Proper Batch Read")) {
 				com_enqueue("%s %d %d %d %d %d %d",
