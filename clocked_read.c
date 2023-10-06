@@ -156,3 +156,10 @@ unsigned get_buffer_size(unsigned buffer_index)
 	check_buffer_index(buffer_index);
 	return buffer_size[buffer_index];
 }
+
+void reset_buffers(void)
+{
+	for (int i = 0; i < CLOCKED_READ_BUFFER_COUNT; i++) {
+		buffer_status[i] = FREE;
+	}
+}

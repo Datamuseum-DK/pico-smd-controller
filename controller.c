@@ -258,6 +258,7 @@ static int parse(void)
 	} break;
 	case COMMAND_op_reset: {
 		job_begin();
+		reset_buffers();
 		xop_reset();
 	} break;
 	case COMMAND_op_blink_test: {

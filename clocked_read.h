@@ -28,6 +28,7 @@ void release_buffer(unsigned buffer_index);
 void wrote_buffer(unsigned buffer_index);
 int get_written_buffer_index(void);
 unsigned get_buffer_size(unsigned buffer_index);
+void reset_buffers(void);
 
 #define CLOCKED_READ_H
 #endif

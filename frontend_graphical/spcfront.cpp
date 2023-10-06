@@ -789,12 +789,14 @@ int main(int argc, char** argv)
 
 			ImGui::SeparatorText("Ops");
 			if (ImGui::Button("Read data (no checks)")) {
-				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
+				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/1, /*skip_checks=*/0);
 			}
 			ImGui::SameLine();
-			ImGui::Checkbox("Continuous", &continuous_read);
-			if (com.file_serial > continuous_read_serial) {
-				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/0, /*skip_checks=*/1);
+			if (ImGui::Checkbox("Continuous", &continuous_read) && continuous_read) {
+				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/1, /*skip_checks=*/0);
+			}
+			if (continuous_read && com.file_serial > continuous_read_serial) {
+				com_enqueue("%s %d %d %d", CMDSTR_op_read_data, MAX_DATA_BUFFER_SIZE/4, /*index_sync=*/1, /*skip_checks=*/0);
 				continuous_read_serial = com.file_serial;
 			}
 
@@ -806,8 +808,8 @@ int main(int argc, char** argv)
 					DRIVE_CYLINDER_COUNT-1,
 					((1 << DRIVE_HEAD_COUNT)-1),
 					MAX_DATA_BUFFER_SIZE,
-					0 , //or: ENTIRE_RANGE,
-					0); //or: ENTIRE_RANGE);
+					ENTIRE_RANGE,
+					ENTIRE_RANGE);
 
 			}
 
