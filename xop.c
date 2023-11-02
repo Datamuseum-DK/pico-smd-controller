@@ -180,15 +180,46 @@ static void select_unit0(void)
 static void read_enable_ex(int servo_offset, int data_strobe_delay)
 {
 	check_drive_error();
-	const unsigned ctrl =
 
-		TAG3BIT_READ_GATE
+	if (servo_offset != 0) {
+		clear_output();
+		sleep_us(TAG_SLEEP_US);
+		unsigned ctrl =
+			  (servo_offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
+			:  servo_offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
+			: 0)
+			;
+		set_bits(ctrl);
+		sleep_us(TAG_SLEEP_US);
+		gpio_put(GPIO_TAG3, 1);
 
-		| (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
-		:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
-		: 0);
+		// wait for potential "micro off-cylinder event" to resolve (we
+		// see errors when activating all at the same time)
+		sleep_us(5000);
 
-	tag3_ctrl(ctrl);
+		// set the remaining bits
+		ctrl |=
+			  (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
+			:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
+			: 0);
+		set_bits(ctrl);
+
+		sleep_us(5000);
+
+		ctrl |= TAG3BIT_READ_GATE;
+
+		set_bits(ctrl);
+	} else {
+		const unsigned ctrl =
+
+			TAG3BIT_READ_GATE
+
+			| (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
+			:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
+			: 0);
+
+		tag3_ctrl(ctrl);
+	}
 }
 
 static void select_cylinder(unsigned cylinder)
@@ -534,35 +565,41 @@ void job_batch_read(void)
 			if ((head_set & mask) == 0) continue;
 			select_head(head);
 			// XXX not sure if a delay is required here?
-			for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
-				sleep_us(5);
-				const absolute_time_t t0 = get_absolute_time();
-				while (!can_allocate_buffer()) {
-					if ((get_absolute_time() - t0) > 10000000) {
-						ERROR(XST_ERR_TIMEOUT);
-					}
+			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
+				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
 					sleep_us(5);
+					const absolute_time_t t0 = get_absolute_time();
+					while (!can_allocate_buffer()) {
+						if ((get_absolute_time() - t0) > 10000000) {
+							ERROR(XST_ERR_TIMEOUT);
+						}
+						sleep_us(5);
+					}
+					const unsigned buffer_index = allocate_buffer(n_32bit_words_per_track);
+					snprintf(
+						get_buffer_filename(buffer_index),
+						CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
+						//"cylinder%.4d-head%d-servo-%s-strobe-%s.nrz", cylinder, head, servo_offset+1, data_strobe_delay+1);
+						"cylinder%.4d-head%d%s%s.nrz", cylinder, head,
+
+						servo_offset == -1 ? "-servo-negative" :
+						servo_offset ==  1 ? "-servo-positive" :
+						""
+						,
+						data_strobe_delay == -1 ? "-strobe-early" :
+						data_strobe_delay ==  1 ? "-strobe-late" :
+						""
+					);
+
+					read_enable_ex(servo_offset, data_strobe_delay);
+					read_data(
+						// XXX combine these 2? I don't like the redundancy
+						buffer_index,
+						n_32bit_words_per_track,
+						/*index_sync=*/1,
+						/*skip_checks=*/0);
+					clear_output();
 				}
-				const unsigned buffer_index = allocate_buffer(n_32bit_words_per_track);
-				snprintf(
-					get_buffer_filename(buffer_index),
-					CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-					//"cylinder%.4d-head%d-servo-%s-strobe-%s.nrz", cylinder, head, servo_offset+1, data_strobe_delay+1);
-					"cylinder%.4d-head%d%s.nrz", cylinder, head,
-
-					data_strobe_delay == -1 ? "-strobe-early" :
-					data_strobe_delay ==  1 ? "-strobe-late" :
-					""
-				);
-
-				read_enable_ex(0, data_strobe_delay);
-				read_data(
-					// XXX combine these 2? I don't like the redundancy
-					buffer_index,
-					n_32bit_words_per_track,
-					/*index_sync=*/1,
-					/*skip_checks=*/0);
-				clear_output();
 			}
 		}
 	}
