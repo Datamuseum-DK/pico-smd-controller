@@ -287,12 +287,6 @@ static int parse(void)
 		job_begin();
 		xop_select_head(command_parser.arguments[0].u);
 	} break;
-	case COMMAND_op_read_enable: {
-		int servo_offset = command_parser.arguments[0].i;
-		int data_strobe_delay = command_parser.arguments[1].i;
-		job_begin();
-		xop_read_enable(servo_offset, data_strobe_delay);
-	} break;
 	case COMMAND_op_read_data: {
 		if (!can_allocate_buffer()) {
 			printf(CPPP_ERROR "no buffer available\n");

@@ -177,7 +177,35 @@ static void select_unit0(void)
 	check_drive_error();
 }
 
-static void read_enable_ex(int servo_offset, int data_strobe_delay)
+static unsigned get_tag3_read_bits(int read_gate, int servo_offset, int data_strobe_delay)
+{
+	unsigned ctrl = 0;
+
+	if (read_gate) {
+		ctrl |= TAG3BIT_READ_GATE;
+	}
+
+	if (servo_offset != 0) {
+		ctrl |=
+			  (servo_offset > 0 ? TAG3BIT_SERVO_OFFSET_POSITIVE
+			:  servo_offset < 0 ? TAG3BIT_SERVO_OFFSET_NEGATIVE
+			: 0)
+			;
+	}
+
+	if (data_strobe_delay != 0) {
+		ctrl |=
+			(read_gate ? TAG3BIT_READ_GATE : 0)
+			| (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
+			:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
+			: 0);
+	}
+
+	return ctrl;
+}
+
+#if 0
+static void read_enable_ex(int read_gate, int servo_offset, int data_strobe_delay)
 {
 	check_drive_error();
 
@@ -203,24 +231,20 @@ static void read_enable_ex(int servo_offset, int data_strobe_delay)
 			:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
 			: 0);
 		set_bits(ctrl);
-
 		sleep_us(5000);
 
-		ctrl |= TAG3BIT_READ_GATE;
-
+		if (read_gate) ctrl |= TAG3BIT_READ_GATE;
 		set_bits(ctrl);
 	} else {
 		const unsigned ctrl =
-
-			TAG3BIT_READ_GATE
-
+			(read_gate ? TAG3BIT_READ_GATE : 0)
 			| (data_strobe_delay > 0 ? TAG3BIT_DATA_STROBE_LATE
 			:  data_strobe_delay < 0 ? TAG3BIT_DATA_STROBE_EARLY
 			: 0);
-
 		tag3_ctrl(ctrl);
 	}
 }
+#endif
 
 static void select_cylinder(unsigned cylinder)
 {
@@ -285,21 +309,6 @@ static inline void read_data_now(unsigned buffer_index, unsigned n_32bit_words, 
 	}
 	wrote_buffer(buffer_index);
 }
-
-static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
-{
-	// XXX don't use
-	if (!skip_checks) check_drive_error();
-	if (index_sync) wait_for_index(skip_checks);
-	read_data_now(buffer_index, n_32bit_words, skip_checks);
-}
-
-#if 0
-static void read_data_normal(unsigned buffer_index, unsigned n_32bit_words)
-{
-	read_data(buffer_index, n_32bit_words, /*index_sync=*/1, /*skip_checks=*/0);
-}
-#endif
 
 static inline void reset(void)
 {
@@ -488,24 +497,6 @@ void xop_select_head(unsigned head)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// read enable //////////////////////////////////////////////////////////////
-void job_read_enable(void)
-{
-	BEGIN();
-	read_enable_ex(
-		job_args.read_enable.servo_offset,
-		job_args.read_enable.data_strobe_delay);
-	DONE();
-}
-void xop_read_enable(int servo_offset, int data_strobe_delay)
-{
-	reset_and_kill_output();
-	job_args.read_enable.servo_offset = servo_offset;
-	job_args.read_enable.data_strobe_delay = data_strobe_delay;
-	run(job_read_enable);
-}
-
-/////////////////////////////////////////////////////////////////////////////
 // read data ////////////////////////////////////////////////////////////////
 unsigned next_read_data_serial = 1;
 void job_read_data(void)
@@ -517,11 +508,11 @@ void job_read_data(void)
 		CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
 		"custom%.4d.nrz",
 		next_read_data_serial++);
-	read_data(
-		buffer_index,
-		job_args.read_data.n_32bit_words,
-		job_args.read_data.index_sync,
-		job_args.read_data.skip_checks);
+	// XXX doesn't make much sense to skip index sync
+	if (job_args.read_data.index_sync) {
+		wait_for_index(job_args.read_data.skip_checks);
+	}
+	read_data_now(buffer_index, job_args.read_data.n_32bit_words, job_args.read_data.skip_checks);
 	DONE();
 }
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
@@ -576,7 +567,12 @@ void job_batch_read(void)
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
 			if ((head_set & mask) == 0) continue;
 			select_head(head);
-			// XXX not sure if a delay is required here?
+			set_bits(0);
+			sleep_us(10);
+			gpio_put(GPIO_TAG3, 1);
+
+			int last_servo_offset = 0;
+
 			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
 				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
 					sleep_us(5);
@@ -603,12 +599,22 @@ void job_batch_read(void)
 						""
 					);
 
+					set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
+
+					// if new servo offset is requested, wait for ON CYLINDER
+					if (servo_offset != last_servo_offset) {
+						sleep_us(100);
+						pin_wait_for_one(GPIO_ON_CYLINDER, 100000, 1);
+						last_servo_offset = servo_offset;
+					}
+
 					wait_for_index(0);
-					read_enable_ex(0, data_strobe_delay);
+					set_bits(get_tag3_read_bits(1, servo_offset, data_strobe_delay));
 					read_data_now(buffer_index, n_32bit_words_per_track, 0);
-					clear_output();
+					set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
 				}
 			}
+			clear_output();
 		}
 	}
 	DONE();

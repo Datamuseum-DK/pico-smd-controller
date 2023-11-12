@@ -28,7 +28,6 @@
 	COMMAND(op_select_cylinder,       "u"        ) \
 	COMMAND(op_broken_seek,           "u"        ) \
 	COMMAND(op_select_head,           "u"        ) \
-	COMMAND(op_read_enable,           "ii"       ) \
 	COMMAND(op_read_data,             "uuu"      ) \
 	COMMAND(op_read_batch,            "uuuuii"   )
 

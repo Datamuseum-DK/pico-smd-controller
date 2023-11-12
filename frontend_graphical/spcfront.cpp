@@ -801,7 +801,7 @@ int main(int argc, char** argv)
 			}
 
 			ImGui::SameLine();
-			if (ImGui::Button("Proper Batch Read")) {
+			if (ImGui::Button("Proper Batch Read (3adj)")) {
 				com_enqueue("%s %d %d %d %d %d %d",
 					CMDSTR_op_read_batch,
 					0,
@@ -809,6 +809,18 @@ int main(int argc, char** argv)
 					((1 << DRIVE_HEAD_COUNT)-1),
 					MAX_DATA_BUFFER_SIZE,
 					0,
+					ENTIRE_RANGE);
+
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("(9adj)")) {
+				com_enqueue("%s %d %d %d %d %d %d",
+					CMDSTR_op_read_batch,
+					0,
+					DRIVE_CYLINDER_COUNT-1,
+					((1 << DRIVE_HEAD_COUNT)-1),
+					MAX_DATA_BUFFER_SIZE,
+					ENTIRE_RANGE,
 					ENTIRE_RANGE);
 
 			}
