@@ -264,22 +264,34 @@ static void select_head(unsigned head)
 	tag2_head(head);
 }
 
-static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
+static inline void wait_for_index(int skip_checks)
 {
-	if (!skip_checks) check_drive_error();
-	if (index_sync) {
-		//pin_wait_for_zero(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS)/10, !skip_checks);
-		//pin_wait_for_one(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS/3), !skip_checks); // wait at most 3 revolutions
-		pin_wait_for_zero(GPIO_INDEX, 1000000, !skip_checks);
-		pin_wait_for_one(GPIO_INDEX,  1000000, !skip_checks);
-	}
+	//pin_wait_for_zero(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS)/10, !skip_checks);
+	//pin_wait_for_one(GPIO_INDEX, FREQ_IN_MICROS(DRIVE_RPS/3), !skip_checks); // wait at most 3 revolutions
+	pin_wait_for_zero(GPIO_INDEX, 1000000, !skip_checks);
+	pin_wait_for_one(GPIO_INDEX,  1000000, !skip_checks);
+}
+
+static inline void read_data_now(unsigned buffer_index, unsigned n_32bit_words, int skip_checks)
+{
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
 	while (1) {
 		if (!clocked_read_is_running()) break;
 		if (!skip_checks) check_drive_error();
 		sleep_us(1);
+		// XXX her kunne jeg evt. prøve at pulse address mark når jeg
+		// ser et SECTOR signal.. sleep_us(1) er bare lige lang tid
+		// nok...
 	}
 	wrote_buffer(buffer_index);
+}
+
+static inline void read_data(unsigned buffer_index, unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
+{
+	// XXX don't use
+	if (!skip_checks) check_drive_error();
+	if (index_sync) wait_for_index(skip_checks);
+	read_data_now(buffer_index, n_32bit_words, skip_checks);
 }
 
 #if 0
@@ -591,13 +603,9 @@ void job_batch_read(void)
 						""
 					);
 
-					read_enable_ex(servo_offset, data_strobe_delay);
-					read_data(
-						// XXX combine these 2? I don't like the redundancy
-						buffer_index,
-						n_32bit_words_per_track,
-						/*index_sync=*/1,
-						/*skip_checks=*/0);
+					wait_for_index(0);
+					read_enable_ex(0, data_strobe_delay);
+					read_data_now(buffer_index, n_32bit_words_per_track, 0);
 					clear_output();
 				}
 			}

@@ -808,7 +808,7 @@ int main(int argc, char** argv)
 					DRIVE_CYLINDER_COUNT-1,
 					((1 << DRIVE_HEAD_COUNT)-1),
 					MAX_DATA_BUFFER_SIZE,
-					ENTIRE_RANGE,
+					0,
 					ENTIRE_RANGE);
 
 			}
