@@ -298,8 +298,21 @@ static inline void wait_for_index(int skip_checks)
 
 static inline void wait_for_sector(void)
 {
-	pin_wait_for_zero(GPIO_SECTOR, 1000000, 0);
-	pin_wait_for_one(GPIO_SECTOR,  1000000, 0);
+	const int mask = (1 << GPIO_SECTOR);
+	{
+		int match_count = 0;
+		const int debounce_count = 5;
+		while (match_count < debounce_count) {
+			const int is_zero = (gpio_get_all() & mask) == 0;
+			if (is_zero) {
+				match_count++;
+			} else {
+				match_count = 0;
+			}
+		}
+	}
+	// wait for one
+	while ((gpio_get_all() & mask) == 0);
 }
 
 static inline void read_data_now(unsigned buffer_index, unsigned n_32bit_words, int skip_checks)
@@ -581,10 +594,7 @@ void job_batch_read(void)
 
 			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
 				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
-					// XXX this off-by-one might not be necessary; I'm unsure whether we
-					// should wait for the first SECTOR after INDEX, or if they come simultaneously
-					const int n_sectors = DRIVE_SECTOR_COUNT + 1;
-					for (int sector = 0; sector < n_sectors; sector++) {
+					for (int sector = 0; sector < DRIVE_SECTOR_COUNT; sector++) {
 						sleep_us(5);
 						const absolute_time_t t0 = get_absolute_time();
 						while (!can_allocate_buffer()) {
