@@ -17,5 +17,10 @@
 #endif
 #define DRIVE_HEAD_COUNT          (5)
 
+// NOTE: sector count depends on dip switches on the drive itself; these define
+// how many clock cycles a sector consists of, and therefore how often the
+// SECTOR impulse is sent.
+#define DRIVE_SECTOR_COUNT        (32)
+
 #define DRIVE_H
 #endif

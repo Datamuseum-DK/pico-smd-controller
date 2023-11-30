@@ -6,8 +6,8 @@
 #include "drive.h"
 #include "controller_protocol.h"
 
-#define CLOCKED_READ_BUFFER_COUNT   2
-#define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (64)
+#define CLOCKED_READ_BUFFER_COUNT   16
+#define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (128)
 
 void clocked_read_init(PIO pio, uint dma_channel);
 void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count);

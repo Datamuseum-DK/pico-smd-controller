@@ -296,6 +296,12 @@ static inline void wait_for_index(int skip_checks)
 	pin_wait_for_one(GPIO_INDEX,  1000000, !skip_checks);
 }
 
+static inline void wait_for_sector(void)
+{
+	pin_wait_for_zero(GPIO_SECTOR, 1000000, 0);
+	pin_wait_for_one(GPIO_SECTOR,  1000000, 0);
+}
+
 static inline void read_data_now(unsigned buffer_index, unsigned n_32bit_words, int skip_checks)
 {
 	clocked_read_into_buffer(buffer_index, n_32bit_words);
@@ -537,7 +543,7 @@ void job_batch_read(void)
 	const unsigned cylinder0 = job_args.batch_read.cylinder0;
 	const unsigned cylinder1 = job_args.batch_read.cylinder1;
 	const unsigned head_set = job_args.batch_read.head_set;
-	const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
+	//const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
 	const int arg_servo_offset = job_args.batch_read.servo_offset;
 	const int arg_data_strobe_delay = job_args.batch_read.data_strobe_delay;
 
@@ -575,43 +581,51 @@ void job_batch_read(void)
 
 			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
 				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
-					sleep_us(5);
-					const absolute_time_t t0 = get_absolute_time();
-					while (!can_allocate_buffer()) {
-						if ((get_absolute_time() - t0) > 10000000) {
-							ERROR(XST_ERR_TIMEOUT);
-						}
+					// XXX this off-by-one might not be necessary; I'm unsure whether we
+					// should wait for the first SECTOR after INDEX, or if they come simultaneously
+					const int n_sectors = DRIVE_SECTOR_COUNT + 1;
+					for (int sector = 0; sector < n_sectors; sector++) {
 						sleep_us(5);
+						const absolute_time_t t0 = get_absolute_time();
+						while (!can_allocate_buffer()) {
+							if ((get_absolute_time() - t0) > 10000000) {
+								ERROR(XST_ERR_TIMEOUT);
+							}
+							sleep_us(5);
+						}
+						const int n_bytes = MAX_DATA_BUFFER_SIZE;
+						const int n_words = n_bytes>>2;
+						const unsigned buffer_index = allocate_buffer(n_bytes);
+						snprintf(
+							get_buffer_filename(buffer_index),
+							CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
+							"cylinder%.4d-head%d-sector%.2d-servo_%s-strobe_%s.nrz", cylinder, head, sector,
+
+							servo_offset == -1 ? "negative" :
+							servo_offset ==  1 ? "positive" :
+							                     "neutral"
+							,
+							data_strobe_delay == -1 ? "early" :
+							data_strobe_delay ==  1 ? "late" :
+							                          "neutral"
+						);
+
+						set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
+
+						// if new servo offset is requested, wait for ON CYLINDER
+						if (servo_offset != last_servo_offset) {
+							sleep_us(100);
+							pin_wait_for_one(GPIO_ON_CYLINDER, 100000, 1);
+							last_servo_offset = servo_offset;
+						}
+
+						wait_for_index(0);
+						for (int i = 0; i < sector; i++) wait_for_sector();
+
+						set_bits(get_tag3_read_bits(1, servo_offset, data_strobe_delay));
+						read_data_now(buffer_index, n_words, 0);
+						set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
 					}
-					const unsigned buffer_index = allocate_buffer(n_32bit_words_per_track);
-					snprintf(
-						get_buffer_filename(buffer_index),
-						CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-						//"cylinder%.4d-head%d-servo-%s-strobe-%s.nrz", cylinder, head, servo_offset+1, data_strobe_delay+1);
-						"cylinder%.4d-head%d%s%s.nrz", cylinder, head,
-
-						servo_offset == -1 ? "-servo-negative" :
-						servo_offset ==  1 ? "-servo-positive" :
-						""
-						,
-						data_strobe_delay == -1 ? "-strobe-early" :
-						data_strobe_delay ==  1 ? "-strobe-late" :
-						""
-					);
-
-					set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
-
-					// if new servo offset is requested, wait for ON CYLINDER
-					if (servo_offset != last_servo_offset) {
-						sleep_us(100);
-						pin_wait_for_one(GPIO_ON_CYLINDER, 100000, 1);
-						last_servo_offset = servo_offset;
-					}
-
-					wait_for_index(0);
-					set_bits(get_tag3_read_bits(1, servo_offset, data_strobe_delay));
-					read_data_now(buffer_index, n_32bit_words_per_track, 0);
-					set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
 				}
 			}
 			clear_output();
