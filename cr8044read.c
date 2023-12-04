@@ -50,7 +50,7 @@ static void feed_sm_pull(int index, unsigned ex)
 	case 0: pio_sm_put_blocking(pio, sm, read_enable_gpio); break;
 	case 1: pio_sm_put_blocking(pio, sm, read_disable_gpio); break;
 	case 2: pio_sm_put_blocking(pio, sm, read_enable_gpio); break;
-	case 3: pio_sm_put_blocking(pio, sm, ((CR8044READ_DATA_SIZE+3)>>2) << 5); break;
+	case 3: pio_sm_put_blocking(pio, sm, (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1); break;
 	case 4: pio_sm_put_blocking(pio, sm, read_disable_gpio); break;
 	}
 }
