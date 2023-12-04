@@ -34,30 +34,26 @@ loop0:
     out pins, 32
 
     ; sleep a magic number of servo clock cycles into Gap-B
-    ; could probably be done as one loop, but this arrangement allows waiting
-    ; more than 32 cycles (and ensures we haven't "busted" our instruction budget)
-    set x, 15
-loop1a:
+    set x, 31
+loop1:
     wait 0 gpio SERVO_CLOCK
     wait 1 gpio SERVO_CLOCK
-    jmp x-- loop1a
-    set x, 15
-loop1b:
-    wait 0 gpio SERVO_CLOCK
-    wait 1 gpio SERVO_CLOCK
-    jmp x-- loop1b
+    jmp x-- loop1
 
     ; enable read
     pull
     out pins, 32
 
-    ; read data
-    pull ; pull data length from OSR/TX-FIFO
+    ; get data length from OSR/TX-FIFO
+    pull
     mov x, osr
+
+    ; wait until SYNC bit
+    wait 1 gpio READ_DATA
 loop2:
+    in pins, 1
     wait 0 gpio READ_CLOCK
     wait 1 gpio READ_CLOCK
-    in pins, 1
     jmp x-- loop2
 
     ; disable read
