@@ -11,6 +11,7 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME}
 	controller.c
 	clocked_read.c
+	cr8044read.c
 	xop.c
 	command_parser.c
 	base64.c
@@ -32,6 +33,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/clocked_read.pio)
+pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/cr8044read.pio)
 pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/loopback_test.pio)
 
 pico_add_extra_outputs(${PROJECT_NAME})

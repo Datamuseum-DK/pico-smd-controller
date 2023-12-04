@@ -10,6 +10,7 @@
 #include "base.h"
 #include "command_parser.h"
 #include "clocked_read.h"
+#include "cr8044read.h"
 #include "controller_protocol.h"
 #include "xop.h"
 #include "base64.h"
@@ -335,7 +336,8 @@ int main()
 	EMIT_PIN_CONFIG
 	#undef PIN
 
-	clocked_read_init(pio0,  /*dma_channel=*/0);
+	//clocked_read_init(pio0,  /*dma_channel=*/0);
+	cr8044read_init(pio0,        /*dma_channel=*/0);
 	loopback_test_prep(pio1, /*dma_channel=*/1);
 
 	stdio_init_all();

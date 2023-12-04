@@ -1,0 +1,68 @@
+.program cr8044read
+
+; see cr8044read.h for notes
+
+; must match pin_config.h
+.define  PUBLIC  READ_DATA    0
+.define  PUBLIC  READ_CLOCK   1
+.define  PUBLIC  SECTOR       3
+.define  PUBLIC  SERVO_CLOCK  8
+
+loop_sector:
+    ; enable read (TAG3 + UNIT_SELECT_TAG + BIT1/READ_GATE + adjustments is pulled from TX FIFO)
+    pull
+    out pins, 32
+
+    ; prepare n=(7+1)*(8+1)=72 loop
+    set x, 7
+    set y, 8
+
+    ; wait until SYNC bit
+    wait 1 gpio READ_DATA
+
+    ; read address field (72 bits)
+loop0:
+    in pins, 1
+    wait 0 gpio READ_CLOCK
+    wait 1 gpio READ_CLOCK
+    jmp x-- loop0
+    set x, 7 ; reset x (must match value above)
+    jmp y-- loop0
+
+    ; disable read (UNIT_SELECT_TAG=1; all other outputs zero)
+    pull
+    out pins, 32
+
+    ; sleep a magic number of servo clock cycles into Gap-B
+    ; could probably be done as one loop, but this arrangement allows waiting
+    ; more than 32 cycles (and ensures we haven't "busted" our instruction budget)
+    set x, 15
+loop1a:
+    wait 0 gpio SERVO_CLOCK
+    wait 1 gpio SERVO_CLOCK
+    jmp x-- loop1a
+    set x, 15
+loop1b:
+    wait 0 gpio SERVO_CLOCK
+    wait 1 gpio SERVO_CLOCK
+    jmp x-- loop1b
+
+    ; enable read
+    pull
+    out pins, 32
+
+    ; read data
+    pull ; pull data length from OSR/TX-FIFO
+    mov x, osr
+loop2:
+    wait 0 gpio READ_CLOCK
+    wait 1 gpio READ_CLOCK
+    in pins, 1
+    jmp x-- loop2
+
+    ; disable read
+    pull
+    out pins, 32
+
+    ; wait for next SECTOR pulse and start over
+    wait 1 gpio SECTOR
