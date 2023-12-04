@@ -337,8 +337,8 @@ int main()
 	#undef PIN
 
 	//clocked_read_init(pio0,  /*dma_channel=*/0);
-	cr8044read_init(pio0,        /*dma_channel=*/0);
-	loopback_test_prep(pio1, /*dma_channel=*/1);
+	cr8044read_init(pio0,        /*dma_channels=*/0,1);
+	loopback_test_prep(pio1, /*dma_channel=*/2);
 
 	stdio_init_all();
 

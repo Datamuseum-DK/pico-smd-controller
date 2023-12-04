@@ -3,6 +3,7 @@
 #include "cr8044read.h"
 #include "cr8044read.pio.h"
 #include "pin_config.h"
+#include "base.h"
 
 _Static_assert(cr8044read_READ_DATA == GPIO_READ_DATA);
 _Static_assert(cr8044read_READ_CLOCK == GPIO_READ_CLOCK);
@@ -12,6 +13,12 @@ _Static_assert(cr8044read_SERVO_CLOCK == GPIO_SERVO_CLOCK);
 static PIO pio;
 static uint sm;
 static uint dma_channel;
+static uint dma_channel2;
+
+#define N_PULL_WORDS_PER_SECTOR (5)
+#define N_PULL_WORDS (N_PULL_WORDS_PER_SECTOR * CR8044READ_N_SECTORS)
+
+static unsigned pull_words[N_PULL_WORDS];
 
 static inline void cr8044read_program_init(PIO pio, uint sm, uint offset)
 {
@@ -33,29 +40,32 @@ static inline uint cr8044read_program_add_and_get_sm(PIO pio)
 	return sm;
 }
 
-void cr8044read_init(PIO _pio, uint _dma_channel)
+void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
 	pio = _pio;
 	dma_channel = _dma_channel;
+	dma_channel2 = _dma_channel2;
 	sm = cr8044read_program_add_and_get_sm(pio);
 }
 
-static void feed_sm_pull(int index, unsigned ex)
+void cr8044read_prep(unsigned extra_read_enable_bits)
 {
 	const unsigned all_gpio = GPIO_UNIT_SELECT_TAG; // must be high even during read disable
 	const unsigned enable_gpio = GPIO_TAG3 | GPIO_BIT1; // read gate
-	const unsigned read_enable_gpio  = all_gpio | enable_gpio | ex;
+	const unsigned read_enable_gpio  = all_gpio | enable_gpio | extra_read_enable_bits;
 	const unsigned read_disable_gpio = all_gpio;
-	switch (index%5) {
-	case 0: pio_sm_put_blocking(pio, sm, read_enable_gpio); break;
-	case 1: pio_sm_put_blocking(pio, sm, read_disable_gpio); break;
-	case 2: pio_sm_put_blocking(pio, sm, read_enable_gpio); break;
-	case 3: pio_sm_put_blocking(pio, sm, (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1); break;
-	case 4: pio_sm_put_blocking(pio, sm, read_disable_gpio); break;
+	unsigned* wp = pull_words;
+	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
+		*(wp++) = read_enable_gpio;
+		*(wp++) = read_disable_gpio;
+		*(wp++) = read_enable_gpio;
+		*(wp++) = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
+		*(wp++) = read_disable_gpio;
 	}
+	if ((wp-pull_words) != N_PULL_WORDS) PANIC(PANIC_UNEXPECTED_STATE);
 }
 
-void cr8044read_execute(uint8_t* dst, unsigned extra_read_enable_bits)
+void cr8044read_execute(uint8_t* dst)
 {
 	pio_sm_set_enabled(pio, sm, false);
 
@@ -67,7 +77,19 @@ void cr8044read_execute(uint8_t* dst, unsigned extra_read_enable_bits)
 	channel_config_set_write_increment(&dma_channel_cfg, true);
 	channel_config_set_dreq(&dma_channel_cfg, pio_get_dreq(pio, sm, false));
 
-	for (int i = 0; i < 4; i++) feed_sm_pull(i, extra_read_enable_bits);
+	dma_channel_config dma_channel2_cfg = dma_channel_get_default_config(dma_channel2);
+	channel_config_set_read_increment(&dma_channel2_cfg,  true);
+	channel_config_set_write_increment(&dma_channel2_cfg, false);
+	channel_config_set_dreq(&dma_channel2_cfg, pio_get_dreq(pio, sm, true));
+
+	dma_channel_configure(
+		dma_channel2,
+		&dma_channel2_cfg,
+		pull_words,
+		&pio->txf[sm],             // write to PIO TX FIFO
+		N_PULL_WORDS,
+		true // start now!
+	);
 
 	const int word_32bit_count = (CR8044READ_BYTES_TOTAL + 3) >> 2;
 	dma_channel_configure(
@@ -80,8 +102,6 @@ void cr8044read_execute(uint8_t* dst, unsigned extra_read_enable_bits)
 	);
 
 	pio_sm_set_enabled(pio, sm, true);
-
-	for (int i = 4; i < (CR8044READ_N_SECTORS-1)*5; i++) feed_sm_pull(i, extra_read_enable_bits);
 
 	while (dma_channel_is_busy(dma_channel)) {};
 }

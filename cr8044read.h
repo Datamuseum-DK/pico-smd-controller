@@ -54,7 +54,9 @@
 #include <stdint.h>
 #include "hardware/pio.h"
 
-void cr8044read_init(PIO _pio, uint _dma_channel);
+void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2);
+void cr8044read_prep(unsigned extra_read_enable_bits);
+void cr8044read_execute(uint8_t* dst);
 
 #define CR8044READ_H
 #endif
