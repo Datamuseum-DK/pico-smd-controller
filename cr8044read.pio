@@ -8,53 +8,61 @@
 .define  PUBLIC  SECTOR       3
 .define  PUBLIC  SERVO_CLOCK  8
 
-loop_sector:
-    ; enable read (TAG3 + UNIT_SELECT_TAG + BIT1/READ_GATE + adjustments is pulled from TX FIFO)
-    pull
-    out pins, 32
+; CPU must keep TX FIFO filled with a 32-bit word pattern repeating this for
+; each sector (length should be 5*32):
+;  - read enable (GPIO bitmask; UNIT_SELECT_TAG + TAG3 + BIT1(/READ_GATE) + adjustments)
+;  - read disable (just UNIT_SELECT_TAG; the rest are clear)
+;  - read enable
+;  - number of data bits to read
+;  - read disable
+; You can match these with the 5 "pull" instructions
+
+    ; enable read 
+    pull          ; OSR <- TX FIFO
+    out pins, 32  ; pins <- OSR
 
     ; prepare n=(7+1)*(8+1)=72 loop
     set x, 7
     set y, 8
 
-    ; wait until SYNC bit
+    ; wait until SYNC bit in data stream
     wait 1 gpio READ_DATA
 
     ; read address field (72 bits)
-loop0:
-    in pins, 1
-    wait 0 gpio READ_CLOCK
+address_field_loop:
+    in pins, 1 ; ISR <- pins (1 bit)
+    wait 0 gpio READ_CLOCK ; using READ_CLOCK as clock
     wait 1 gpio READ_CLOCK
-    jmp x-- loop0
+    jmp x-- address_field_loop
     set x, 7 ; reset x (must match value above)
-    jmp y-- loop0
+    jmp y-- address_field_loop
 
-    ; disable read (UNIT_SELECT_TAG=1; all other outputs zero)
+    ; disable read
     pull
     out pins, 32
 
     ; sleep a magic number of servo clock cycles into Gap-B
     set x, 31
-loop1:
-    wait 0 gpio SERVO_CLOCK
+magic_wait_loop:
+    wait 0 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
     wait 1 gpio SERVO_CLOCK
-    jmp x-- loop1
+    jmp x-- magic_wait_loop
 
     ; enable read
     pull
     out pins, 32
 
+    ; read data field...
     ; get data length from OSR/TX-FIFO
     pull
     mov x, osr
-
     ; wait until SYNC bit
     wait 1 gpio READ_DATA
-loop2:
+data_field_loop:
     in pins, 1
     wait 0 gpio READ_CLOCK
     wait 1 gpio READ_CLOCK
-    jmp x-- loop2
+    jmp x-- data_field_loop
 
     ; disable read
     pull
