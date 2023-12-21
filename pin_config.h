@@ -12,7 +12,7 @@
 	PIN(  STATUS,    SEEK_ERROR,      5   ) \
 	PIN(  STATUS,    ON_CYLINDER,     6   ) \
 	PIN(  STATUS,    UNIT_READY,      7   ) \
-	PIN(  STATUS,    SERVO_CLOCK,     8   ) \
+	PIN(  DATA,      SERVO_CLOCK,     8   ) \
 	PIN(  STATUS,    UNIT_SELECTED,   9   ) \
 	PIN(  STATUS,    SEEK_END,        10  ) \
 	PIN(  CONTROL,   UNIT_SELECT_TAG, 14  ) \
