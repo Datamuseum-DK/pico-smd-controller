@@ -801,11 +801,20 @@ int main(int argc, char** argv)
 				continuous_read_serial = com.file_serial;
 			}
 
-			ImGui::SameLine();
-			ImGui::InputInt("##ncyl", &n_cyls);
+			ImGui::InputInt("Ncyl##ncyl", &n_cyls);
 
+			if (ImGui::Button("Proper Batch Read (0adj)")) {
+				com_enqueue("%s %d %d %d %d %d %d",
+					CMDSTR_op_read_batch,
+					0,
+					n_cyls,
+					((1 << DRIVE_HEAD_COUNT)-1),
+					MAX_DATA_BUFFER_SIZE,
+					0,
+					0);
+			}
 			ImGui::SameLine();
-			if (ImGui::Button("Proper Batch Read (3adj)")) {
+			if (ImGui::Button("(3adj)")) {
 				com_enqueue("%s %d %d %d %d %d %d",
 					CMDSTR_op_read_batch,
 					0,
