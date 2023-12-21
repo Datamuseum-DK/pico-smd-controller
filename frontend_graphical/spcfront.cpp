@@ -701,6 +701,7 @@ int main(int argc, char** argv)
 	int continuous_read_serial = 0;
 
 	int max_status_txt_width = 0;
+	int n_cyls = DRIVE_CYLINDER_COUNT-1;
 
 	int font_size = 18;
 	if (argc == 3) {
@@ -801,11 +802,14 @@ int main(int argc, char** argv)
 			}
 
 			ImGui::SameLine();
+			ImGui::InputInt("##ncyl", &n_cyls);
+
+			ImGui::SameLine();
 			if (ImGui::Button("Proper Batch Read (3adj)")) {
 				com_enqueue("%s %d %d %d %d %d %d",
 					CMDSTR_op_read_batch,
 					0,
-					DRIVE_CYLINDER_COUNT-1,
+					n_cyls,
 					((1 << DRIVE_HEAD_COUNT)-1),
 					MAX_DATA_BUFFER_SIZE,
 					0,
@@ -817,7 +821,7 @@ int main(int argc, char** argv)
 				com_enqueue("%s %d %d %d %d %d %d",
 					CMDSTR_op_read_batch,
 					0,
-					DRIVE_CYLINDER_COUNT-1,
+					n_cyls,
 					((1 << DRIVE_HEAD_COUNT)-1),
 					MAX_DATA_BUFFER_SIZE,
 					ENTIRE_RANGE,

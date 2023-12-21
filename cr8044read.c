@@ -50,9 +50,8 @@ void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 
 void cr8044read_prep(unsigned extra_read_enable_bits)
 {
-	const unsigned all_gpio = GPIO_UNIT_SELECT_TAG; // must be high even during read disable
-	const unsigned enable_gpio = GPIO_TAG3 | GPIO_BIT1; // read gate
-	const unsigned read_enable_gpio  = all_gpio | enable_gpio | extra_read_enable_bits;
+	const unsigned all_gpio = GPIO_TAG3 | GPIO_UNIT_SELECT_TAG; // must be high even during read disable
+	const unsigned read_enable_gpio  = all_gpio | GPIO_BIT1 | extra_read_enable_bits;
 	const unsigned read_disable_gpio = all_gpio;
 	unsigned* wp = pull_words;
 	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
@@ -102,6 +101,6 @@ void cr8044read_execute(uint8_t* dst)
 	);
 
 	pio_sm_set_enabled(pio, sm, true);
-
 	while (dma_channel_is_busy(dma_channel)) {};
+	pio_sm_set_enabled(pio, sm, false);
 }

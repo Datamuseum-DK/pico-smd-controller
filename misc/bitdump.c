@@ -36,7 +36,7 @@ int main(int argc, char** argv)
 		uint8_t x = *(p++);
 		//for (int b = 0; b < 8; b++) fputc(((x >> (7-b)) & 1) ? '1' : '0', stdout);
 		for (int b = 0; b < 8; b++) fputc(((x >> (b)) & 1) ? '@' : '.', stdout);
-		if (((bit >> 3) % 20) == 19) fputc('\n', stdout);
+		//if (((bit >> 3) % 20) == 19) fputc('\n', stdout);
 	}
 	printf("\n");
 

@@ -100,7 +100,7 @@ enum tag3bit {
 	#undef BIT
 };
 
-#define MAX_DATA_BUFFER_SIZE (632) // XXX value chosen to have enough 32-bit words for 1 sector (628.5 bytes)
+#define MAX_DATA_BUFFER_SIZE (9+551)*33
 
 enum adjustment {
 	MINUS   = -1,

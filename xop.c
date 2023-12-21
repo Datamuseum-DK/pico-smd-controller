@@ -15,6 +15,7 @@
 #include "controller_protocol.h"
 #include "xop.h"
 #include "clocked_read.h"
+#include "cr8044read.h"
 
 #define ERROR_MASK                \
 	( (1 << GPIO_FAULT)       \
@@ -315,20 +316,6 @@ static inline void wait_for_sector(void)
 	while ((gpio_get_all() & mask) == 0);
 }
 
-static inline void read_data_now(unsigned buffer_index, unsigned n_32bit_words, int skip_checks)
-{
-	clocked_read_into_buffer(buffer_index, n_32bit_words);
-	while (1) {
-		if (!clocked_read_is_running()) break;
-		if (!skip_checks) check_drive_error();
-		sleep_us(1);
-		// XXX her kunne jeg evt. prøve at pulse address mark når jeg
-		// ser et SECTOR signal.. sleep_us(1) er bare lige lang tid
-		// nok...
-	}
-	wrote_buffer(buffer_index);
-}
-
 static inline void reset(void)
 {
 	multicore_reset_core1(); // waits until core1 is down
@@ -517,33 +504,9 @@ void xop_select_head(unsigned head)
 
 /////////////////////////////////////////////////////////////////////////////
 // read data ////////////////////////////////////////////////////////////////
-unsigned next_read_data_serial = 1;
-void job_read_data(void)
-{
-	BEGIN();
-	const unsigned buffer_index = job_args.read_data.buffer_index;
-	snprintf(
-		get_buffer_filename(buffer_index),
-		CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-		"custom%.4d.nrz",
-		next_read_data_serial++);
-	// XXX doesn't make much sense to skip index sync
-	if (job_args.read_data.index_sync) {
-		wait_for_index(job_args.read_data.skip_checks);
-	}
-	read_data_now(buffer_index, job_args.read_data.n_32bit_words, job_args.read_data.skip_checks);
-	DONE();
-}
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
-	reset();
-	const unsigned buffer_index = allocate_buffer(n_32bit_words << 2);
-	job_args.read_data.buffer_index = buffer_index;
-	job_args.read_data.n_32bit_words = n_32bit_words;
-	job_args.read_data.index_sync = index_sync;
-	job_args.read_data.skip_checks = skip_checks;
-	run(job_read_data);
-	return buffer_index;
+	PANIC(PANIC_XXX); // doesn't currently make sense
 }
 
 
@@ -590,8 +553,6 @@ void job_batch_read(void)
 			sleep_us(10);
 			gpio_put(GPIO_TAG3, 1);
 
-			int last_servo_offset = 0;
-
 			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
 				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
 					for (int sector = 0; sector < DRIVE_SECTOR_COUNT; sector++) {
@@ -603,13 +564,11 @@ void job_batch_read(void)
 							}
 							sleep_us(5);
 						}
-						const int n_bytes = MAX_DATA_BUFFER_SIZE;
-						const int n_words = n_bytes>>2;
-						const unsigned buffer_index = allocate_buffer(n_bytes);
+						const unsigned buffer_index = allocate_buffer(MAX_DATA_BUFFER_SIZE);
 						snprintf(
 							get_buffer_filename(buffer_index),
 							CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-							"cylinder%.4d-head%d-sector%.2d-servo_%s-strobe_%s.nrz", cylinder, head, sector,
+							"cylinder%.4d-head%d-sector%.2d-servo_%s-strobe_%s.cr8044nrz", cylinder, head, sector,
 
 							servo_offset == -1 ? "negative" :
 							servo_offset ==  1 ? "positive" :
@@ -620,21 +579,13 @@ void job_batch_read(void)
 							                          "neutral"
 						);
 
-						set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
-
-						// if new servo offset is requested, wait for ON CYLINDER
-						if (servo_offset != last_servo_offset) {
-							sleep_us(100);
-							pin_wait_for_one(GPIO_ON_CYLINDER, 100000, 1);
-							last_servo_offset = servo_offset;
-						}
+						cr8044read_prep(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
 
 						wait_for_index(0);
 						for (int i = 0; i < sector; i++) wait_for_sector();
 
-						set_bits(get_tag3_read_bits(1, servo_offset, data_strobe_delay));
-						read_data_now(buffer_index, n_words, 0);
-						set_bits(get_tag3_read_bits(0, servo_offset, data_strobe_delay));
+						cr8044read_execute(get_buffer_data(buffer_index));
+						wrote_buffer(buffer_index);
 					}
 				}
 			}
