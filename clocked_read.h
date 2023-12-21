@@ -9,12 +9,6 @@
 #define CLOCKED_READ_BUFFER_COUNT   4
 #define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (128)
 
-#if 0
-void clocked_read_init(PIO pio, uint dma_channel);
-void clocked_read_into_buffer(unsigned buffer_index, unsigned word_32bit_count);
-int clocked_read_is_running(void);
-#endif
-
 enum buffer_status {
 	FREE,
 	BUSY, // "allocated" or "writing"

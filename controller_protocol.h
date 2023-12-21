@@ -100,7 +100,7 @@ enum tag3bit {
 	#undef BIT
 };
 
-#define MAX_DATA_BUFFER_SIZE (9+551)*33
+#define MAX_DATA_BUFFER_SIZE (9+551+1)*32 // XXX should match cr8044read.h
 
 enum adjustment {
 	MINUS   = -1,
