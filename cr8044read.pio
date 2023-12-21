@@ -17,7 +17,7 @@
 ;  - read disable
 ; You can match these with the 5 "pull" instructions
 
-    ; enable read 
+    ; enable read
     pull          ; OSR <- TX FIFO
     out pins, 32  ; pins <- OSR
 
@@ -25,7 +25,7 @@
     set x, 7
     set y, 8
 
-    ; wait until SYNC bit in data stream
+    ; wait until SYNC bit in address field
     wait 1 gpio READ_DATA
 
     ; read address field (72 bits)
@@ -56,7 +56,7 @@ magic_wait_loop:
     ; get data length from OSR/TX-FIFO
     pull
     mov x, osr
-    ; wait until SYNC bit
+    ; wait until SYNC bit in data field
     wait 1 gpio READ_DATA
 data_field_loop:
     in pins, 1
