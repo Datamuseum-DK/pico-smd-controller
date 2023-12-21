@@ -27,6 +27,7 @@ static inline void cr8044read_program_init(PIO pio, uint sm, uint offset)
 	pio_gpio_init(pio, 0);
 	//
 	sm_config_set_in_shift(&cfg, /*shift_right=*/true, /*autopush=*/true, /*push_threshold=*/32);
+	sm_config_set_out_shift(&cfg, /*shift_right=*/false, /*autopull=*/true, /*pull_threshold=*/32);
 	sm_config_set_fifo_join(&cfg, PIO_FIFO_JOIN_NONE);
 	//
 	pio_sm_init(pio, sm, offset, &cfg);
