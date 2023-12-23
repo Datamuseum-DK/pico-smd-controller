@@ -8,6 +8,7 @@
 
 _Static_assert(cr8044read_READ_DATA == GPIO_READ_DATA);
 _Static_assert(cr8044read_READ_CLOCK == GPIO_READ_CLOCK);
+_Static_assert(cr8044read_INDEX == GPIO_INDEX);
 _Static_assert(cr8044read_SECTOR == GPIO_SECTOR);
 _Static_assert(cr8044read_SERVO_CLOCK == GPIO_SERVO_CLOCK);
 
@@ -16,7 +17,7 @@ static uint sm;
 static uint dma_channel;
 static uint dma_channel2;
 
-#define N_PULL_WORDS_PER_SECTOR (5)
+#define N_PULL_WORDS_PER_SECTOR (1)
 #define N_PULL_WORDS (N_PULL_WORDS_PER_SECTOR * CR8044READ_N_SECTORS)
 
 static unsigned pull_words[N_PULL_WORDS];
@@ -25,13 +26,9 @@ static inline void cr8044read_program_init(PIO pio, uint sm, uint offset)
 {
 	pio_sm_config cfg = cr8044read_program_get_default_config(offset);
 	sm_config_set_in_pins(&cfg, GPIO_READ_DATA);
-	sm_config_set_out_pins(&cfg, 0, 32);
+	sm_config_set_set_pins(&cfg, GPIO_BIT1, 1);
 
-	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT1, /*pin_count=*/1, /*is_out=*/true);
-	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT2, /*pin_count=*/1, /*is_out=*/true);
-	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT3, /*pin_count=*/1, /*is_out=*/true);
-	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT7, /*pin_count=*/1, /*is_out=*/true);
-	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT8, /*pin_count=*/1, /*is_out=*/true);
+	pio_sm_set_consecutive_pindirs(pio, sm, GPIO_BIT1,   /*pin_count=*/1, /*is_out=*/true);
 
 	sm_config_set_in_shift(&cfg, /*shift_right=*/true, /*autopush=*/true, /*push_threshold=*/32);
 	sm_config_set_out_shift(&cfg, /*shift_right=*/false, /*autopull=*/false, /*pull_threshold=*/32);
@@ -50,38 +47,23 @@ static inline uint cr8044read_program_add_and_get_sm(PIO pio)
 
 void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
+	unsigned* wp = pull_words;
+	const unsigned nval = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
+	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
+		*(wp++) = nval;
+	}
+	if ((wp-pull_words) != N_PULL_WORDS) PANIC(PANIC_UNEXPECTED_STATE);
 	pio = _pio;
 	dma_channel = _dma_channel;
 	dma_channel2 = _dma_channel2;
 	sm = cr8044read_program_add_and_get_sm(pio);
 }
 
-void cr8044read_prep(unsigned extra_read_enable_bits)
-{
-	const unsigned read_enable_gpio = GPIO_BIT1 | extra_read_enable_bits;
-	const unsigned read_disable_gpio = 0;
-	unsigned* wp = pull_words;
-	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
-		*(wp++) = read_enable_gpio;
-		*(wp++) = read_disable_gpio;
-		*(wp++) = read_enable_gpio;
-		*(wp++) = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
-		*(wp++) = read_disable_gpio;
-	}
-	if ((wp-pull_words) != N_PULL_WORDS) PANIC(PANIC_UNEXPECTED_STATE);
-}
-
 void cr8044read_execute(uint8_t* dst)
 {
 	pio_sm_set_enabled(pio, sm, false);
 
-	// PIO must be able to drive these pins. these calls are like calling
-	// gpio_set_function() with the corresponding pio (PIO0/1)
-	pio_gpio_init(pio, GPIO_BIT1); // read gate
-	pio_gpio_init(pio, GPIO_BIT2); // servo offset positive
-	pio_gpio_init(pio, GPIO_BIT3); // servo offset negative
-	pio_gpio_init(pio, GPIO_BIT7); // data strobe early
-	pio_gpio_init(pio, GPIO_BIT8); // data strobe late
+	pio_gpio_init(pio, GPIO_BIT1);
 
 	pio_sm_clear_fifos(pio, sm);
 	pio_sm_restart(pio, sm);
@@ -125,8 +107,4 @@ void cr8044read_execute(uint8_t* dst)
 	// reset the effect of calling pio_gpio_init() above so that software
 	// can drive these pins again
 	gpio_set_function(GPIO_BIT1, GPIO_FUNC_SIO);
-	gpio_set_function(GPIO_BIT2, GPIO_FUNC_SIO);
-	gpio_set_function(GPIO_BIT3, GPIO_FUNC_SIO);
-	gpio_set_function(GPIO_BIT7, GPIO_FUNC_SIO);
-	gpio_set_function(GPIO_BIT8, GPIO_FUNC_SIO);
 }
