@@ -1,4 +1,7 @@
+#include <stdio.h>
+
 #include "hardware/dma.h"
+#include "pico/time.h"
 
 #include "cr8044read.h"
 #include "cr8044read.pio.h"
@@ -101,7 +104,16 @@ void cr8044read_execute(uint8_t* dst)
 	}
 
 	pio_sm_set_enabled(pio, sm, true);
-	while (dma_channel_is_busy(dma_channel)) {};
+
+	absolute_time_t t0 = get_absolute_time();
+	while (dma_channel_is_busy(dma_channel)) {
+		absolute_time_t dt = get_absolute_time() - t0;
+		// NOTE: job should take at most 1/60 seconds
+		if (dt > 500000LL) {
+			printf(CPPP_INFO "ERROR: cr8044read_execute() stalled\n");
+			break;
+		}
+	}
 	pio_sm_set_enabled(pio, sm, false);
 
 	// reset the effect of calling pio_gpio_init() above so that software
