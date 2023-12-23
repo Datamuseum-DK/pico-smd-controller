@@ -1,7 +1,5 @@
 .program cr8044read
 
-; see cr8044read.h for notes
-
 ; must match pin_config.h
 .define  PUBLIC  READ_DATA    0
 .define  PUBLIC  READ_CLOCK   1
@@ -11,19 +9,12 @@
 
     wait 1 gpio INDEX
 again:
-
-    set x, 31
-magic0_wait_loop:
-    wait 0 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
-    wait 1 gpio SERVO_CLOCK
-    jmp x-- magic0_wait_loop
+    ; prep x=9*8 for loop below
+    pull
+    mov x, osr
 
     ; enable read
     set pins, 1
-
-    ; prepare n=(7+1)*(8+1)=72 loop
-    set x, 7
-    set y, 8
 
     ; wait until SYNC bit in address field
     wait 1 gpio READ_DATA
@@ -34,18 +25,16 @@ address_field_loop:
     wait 0 gpio READ_CLOCK ; using READ_CLOCK as clock
     wait 1 gpio READ_CLOCK
     jmp x-- address_field_loop
-    set x, 7 ; reset x (must match value above)
-    jmp y-- address_field_loop
 
     ; disable read
     set pins, 0
 
-    ; sleep a magic number of servo clock cycles into Gap-B
-    set x, 31
-magic1_wait_loop:
+    pull
+    mov x, osr
+gap_b_wait_loop:
     wait 0 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
     wait 1 gpio SERVO_CLOCK
-    jmp x-- magic1_wait_loop
+    jmp x-- gap_b_wait_loop
 
     ; enable read
     set pins, 1

@@ -1,3 +1,43 @@
+/*
+
+This PIO/DMA code is specifically designed to read data written by a CR8044
+disk controller.
+
+Initially we attempted a naive/raw approach that simply read 5+ revolutions
+after INDEX. This approach is still useful for analyzing data with an unknown
+sector structure ("raw reads"), but in practice it can't make high quality data
+extractions. The problem is that the data stream gets inverted at certain
+points, and it seems probable that this point is where "historic" disk
+controllers would begin writing sector data.
+
+The CR8044 sector structure is:
+   Gap-A  (31 bytes of zeroes)
+   Address Field (cylinder, head, sector, checksum, bad sector flags, etc...)
+   Gap-B  (19 bytes of zeroes)
+   Data Field
+   Gap-C  (17.5 bytes of zeroes)
+Analysis of raw reads show that many inversions occur ~30 bits into Gap-B. It's
+a good guess that the old CR8044 disk began writing sector data at this point.
+
+The SMD manual states that the drive must read 7.75µs data zeroes when you
+enable read gate in order for the drive to sync correctly. This corresponds to
+~75 zero-bits (at 9.67MHz).
+
+However, it seems this synchronization isn't stable enough to survive the
+"write point" in Gap-B. So the solution is to turn read gate on/off at precise
+points.
+
+*/
+
+/*
+FIXME:
+ - PIO program reads the first address field bit twice
+ - Program halts when CR8044READ_N_SECTORS > 32 - why?
+ - Wait for INDEX doesn't really seem to work; reads are started at "random"
+   sectors... yet the point is not completely random, because the first sector
+   isn't a "garbage read".
+*/
+
 #include <stdio.h>
 
 #include "hardware/dma.h"
@@ -20,7 +60,7 @@ static uint sm;
 static uint dma_channel;
 static uint dma_channel2;
 
-#define N_PULL_WORDS_PER_SECTOR (1)
+#define N_PULL_WORDS_PER_SECTOR (3)
 #define N_PULL_WORDS (N_PULL_WORDS_PER_SECTOR * CR8044READ_N_SECTORS)
 
 static unsigned pull_words[N_PULL_WORDS];
@@ -51,9 +91,13 @@ static inline uint cr8044read_program_add_and_get_sm(PIO pio)
 void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
 	unsigned* wp = pull_words;
-	const unsigned nval = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
+	const unsigned n_address_bits = 8*9;
+	const unsigned gap_b_wait = 31;
+	const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
 	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
-		*(wp++) = nval;
+		*(wp++) = n_address_bits;
+		*(wp++) = gap_b_wait;
+		*(wp++) = n_data_bits;
 	}
 	if ((wp-pull_words) != N_PULL_WORDS) PANIC(PANIC_UNEXPECTED_STATE);
 	pio = _pio;
