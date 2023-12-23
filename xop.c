@@ -499,15 +499,14 @@ void job_batch_read(void)
 		//   Cylinder condition and it receives a Read or Write gate
 		//   from the controller."
 		unsigned mask = 1;
-		gpio_put(GPIO_TAG3, 1);
-		for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
-			for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
-				set_bits(get_read_adjustment_bits(servo_offset, data_strobe_delay));
-
-				for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
-					if ((head_set & mask) == 0) continue;
-					select_head(head);
-					sleep_us(10);
+		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
+			if ((head_set & mask) == 0) continue;
+			select_head(head);
+			set_bits(0);
+			gpio_put(GPIO_TAG3, 1);
+			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
+				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
+					set_bits(get_read_adjustment_bits(servo_offset, data_strobe_delay));
 
 					const absolute_time_t t0 = get_absolute_time();
 					while (!can_allocate_buffer()) {
@@ -534,8 +533,8 @@ void job_batch_read(void)
 					wrote_buffer(buffer_index);
 				}
 			}
+			clear_output();
 		}
-		clear_output();
 	}
 	DONE();
 }
