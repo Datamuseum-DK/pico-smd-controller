@@ -9,7 +9,7 @@
 
     wait 1 gpio INDEX
 again:
-    ; prep x=9*8 for loop below
+    ; get address length from OSR/TX-FIFO
     pull
     mov x, osr
 
@@ -26,7 +26,7 @@ again:
     ; this is important for the read/wait sequence below (`read, wait 0, wait
     ; 1` caused the first bit to be read twice)
 
-    ; read address field (72 bits)
+    ; read address field
 address_field_loop:
     wait 1 gpio READ_CLOCK ; using READ_CLOCK as clock
     in pins, 1 ; ISR <- pins (1 bit)
@@ -36,6 +36,7 @@ address_field_loop:
     ; disable read
     set pins, 0
 
+    ; get gap-b wait iteration count from OSR/TX-FIFO
     pull
     mov x, osr
 gap_b_wait_loop:
@@ -46,7 +47,7 @@ gap_b_wait_loop:
     ; enable read
     set pins, 1
 
-    ; read data field...
+    ; read data field
     ; get data length from OSR/TX-FIFO
     pull
     mov x, osr

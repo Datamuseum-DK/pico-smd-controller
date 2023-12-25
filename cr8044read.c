@@ -29,14 +29,6 @@ points.
 
 */
 
-/*
-FIXME:
- - Program halts when CR8044READ_N_SECTORS > 32 - why?
- - Wait for INDEX doesn't really seem to work; reads are started at "random"
-   sectors... yet the point is not completely random, because the first sector
-   isn't a "garbage read".
-*/
-
 #include <stdio.h>
 
 #include "hardware/dma.h"
