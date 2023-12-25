@@ -58,15 +58,16 @@ static PIO pio;
 static uint sm;
 static uint dma_channel;
 static uint dma_channel2;
+static uint pc_offset;
 
 #define N_PULL_WORDS_PER_SECTOR (3)
 #define N_PULL_WORDS (N_PULL_WORDS_PER_SECTOR * CR8044READ_N_SECTORS)
 
 static unsigned pull_words[N_PULL_WORDS];
 
-static inline void cr8044read_program_init(PIO pio, uint sm, uint offset)
+static inline void cr8044read_program_init(PIO pio, uint sm, uint pc_offset)
 {
-	pio_sm_config cfg = cr8044read_program_get_default_config(offset);
+	pio_sm_config cfg = cr8044read_program_get_default_config(pc_offset);
 	sm_config_set_in_pins(&cfg, GPIO_READ_DATA);
 	sm_config_set_set_pins(&cfg, GPIO_BIT1, 1);
 
@@ -76,14 +77,14 @@ static inline void cr8044read_program_init(PIO pio, uint sm, uint offset)
 	sm_config_set_out_shift(&cfg, /*shift_right=*/false, /*autopull=*/false, /*pull_threshold=*/32);
 	sm_config_set_fifo_join(&cfg, PIO_FIFO_JOIN_NONE);
 
-	pio_sm_init(pio, sm, offset, &cfg);
+	pio_sm_init(pio, sm, pc_offset, &cfg);
 }
 //
 static inline uint cr8044read_program_add_and_get_sm(PIO pio)
 {
-	const uint offset = pio_add_program(pio, &cr8044read_program);
+	pc_offset = pio_add_program(pio, &cr8044read_program);
 	const uint sm = pio_claim_unused_sm(pio, true);
-	cr8044read_program_init(pio, sm, offset);
+	cr8044read_program_init(pio, sm, pc_offset);
 	return sm;
 }
 
@@ -117,6 +118,7 @@ void cr8044read_execute(uint8_t* dst)
 
 	pio_sm_clear_fifos(pio, sm);
 	pio_sm_restart(pio, sm);
+	pio_sm_exec(pio, sm, pio_encode_jmp(pc_offset));
 
 	const int word_32bit_count = (CR8044READ_BYTES_TOTAL + 3) >> 2;
 
