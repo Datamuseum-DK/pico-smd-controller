@@ -48,10 +48,10 @@ FIXME:
 #include "base.h"
 #include "controller_protocol.h"
 
-_Static_assert(cr8044read_READ_DATA == GPIO_READ_DATA);
-_Static_assert(cr8044read_READ_CLOCK == GPIO_READ_CLOCK);
-_Static_assert(cr8044read_INDEX == GPIO_INDEX);
-_Static_assert(cr8044read_SECTOR == GPIO_SECTOR);
+_Static_assert(cr8044read_READ_DATA   == GPIO_READ_DATA);
+_Static_assert(cr8044read_READ_CLOCK  == GPIO_READ_CLOCK);
+_Static_assert(cr8044read_INDEX       == GPIO_INDEX);
+_Static_assert(cr8044read_SECTOR      == GPIO_SECTOR);
 _Static_assert(cr8044read_SERVO_CLOCK == GPIO_SERVO_CLOCK);
 
 static PIO pio;
