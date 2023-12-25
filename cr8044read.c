@@ -92,12 +92,16 @@ void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
 	unsigned* wp = pull_words;
 	const unsigned n_address_bits = 8*9;
-	const unsigned gap_b_wait = 31;
-	const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5) - 1;
+	const unsigned gap_b_wait = 32;
+	const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5);
 	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
-		*(wp++) = n_address_bits;
-		*(wp++) = gap_b_wait;
-		*(wp++) = n_data_bits;
+		// these are loaded into the PIO X-register and used for loop
+		// counting. since loops are "repeat and decrement if
+		// non-zero", the value must be one smaller than the intended
+		// iteration count.
+		*(wp++) = n_address_bits - 1;
+		*(wp++) = gap_b_wait - 1;
+		*(wp++) = n_data_bits - 1;
 	}
 	if ((wp-pull_words) != N_PULL_WORDS) PANIC(PANIC_UNEXPECTED_STATE);
 	pio = _pio;

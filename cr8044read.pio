@@ -19,11 +19,18 @@ again:
     ; wait until SYNC bit in address field
     wait 1 gpio READ_DATA
 
+    ; RE: read timing:
+    ;  - READ_DATA changes on 1->0 READ_CLOCK edge
+    ;  - The manual advices you to read data on 0->1 READ_CLOCK edge
+    ; see "Figure 3-58. Read PLO and Data Separator timing" in the manual.
+    ; this is important for the read/wait sequence below (`read, wait 0, wait
+    ; 1` caused the first bit to be read twice)
+
     ; read address field (72 bits)
 address_field_loop:
+    wait 1 gpio READ_CLOCK ; using READ_CLOCK as clock
     in pins, 1 ; ISR <- pins (1 bit)
-    wait 0 gpio READ_CLOCK ; using READ_CLOCK as clock
-    wait 1 gpio READ_CLOCK
+    wait 0 gpio READ_CLOCK
     jmp x-- address_field_loop
 
     ; disable read
@@ -32,8 +39,8 @@ address_field_loop:
     pull
     mov x, osr
 gap_b_wait_loop:
-    wait 0 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
-    wait 1 gpio SERVO_CLOCK
+    wait 1 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
+    wait 0 gpio SERVO_CLOCK
     jmp x-- gap_b_wait_loop
 
     ; enable read
@@ -46,9 +53,9 @@ gap_b_wait_loop:
     ; wait until SYNC bit in data field
     wait 1 gpio READ_DATA
 data_field_loop:
+    wait 1 gpio READ_CLOCK
     in pins, 1
     wait 0 gpio READ_CLOCK
-    wait 1 gpio READ_CLOCK
     jmp x-- data_field_loop
 
     ; disable read
