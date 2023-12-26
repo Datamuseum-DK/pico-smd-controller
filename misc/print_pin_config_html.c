@@ -133,7 +133,7 @@ static const char* get_label_class(int e)
 {
 	const char* in = "label input";
 	const char* out = "label output";
-	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return TYPE==DATA?in:TYPE==STATUS?in:TYPE==CONTROL?out:"";
+	#define PIN(TYPE, NAME, GPN) if (GPN == (e-GP0)) return TYPE==DATA?in:TYPE==STATUS?in:TYPE==FREQ?in:TYPE==CONTROL?out:"";
 	EMIT_PIN_CONFIG
 	#undef PIN
 	return "";
