@@ -9,6 +9,16 @@
 
     wait 1 gpio INDEX
 again:
+
+    ; get gap-a wait iteration count from OSR/TX-FIFO
+    pull
+    mov x, osr
+gap_a_wait_loop:
+    wait 1 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
+    wait 0 gpio SERVO_CLOCK
+    jmp x-- gap_a_wait_loop
+
+
     ; get address length from OSR/TX-FIFO
     pull
     mov x, osr

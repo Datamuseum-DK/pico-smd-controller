@@ -52,7 +52,7 @@ static uint dma_channel;
 static uint dma_channel2;
 static uint pc_offset;
 
-#define N_PULL_WORDS_PER_SECTOR (3)
+#define N_PULL_WORDS_PER_SECTOR (4)
 #define N_PULL_WORDS (N_PULL_WORDS_PER_SECTOR * CR8044READ_N_SECTORS)
 
 static unsigned pull_words[N_PULL_WORDS];
@@ -84,6 +84,7 @@ void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
 	unsigned* wp = pull_words;
 	const unsigned n_address_bits = 8*9;
+	const unsigned gap_a_wait = 32;
 	const unsigned gap_b_wait = 32;
 	const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5);
 	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
@@ -91,6 +92,7 @@ void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 		// counting. since loops are "repeat and decrement if
 		// non-zero", the value must be one smaller than the intended
 		// iteration count.
+		*(wp++) = gap_a_wait - 1;
 		*(wp++) = n_address_bits - 1;
 		*(wp++) = gap_b_wait - 1;
 		*(wp++) = n_data_bits - 1;
