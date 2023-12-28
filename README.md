@@ -2,7 +2,7 @@ A work-in-progress read-only(/archival) disk controller for CDC BK4XX/BK5XX (976
 
 ## Hardware
 Pico pin config:
- - [`pin_config.html`](https://htmlpreview.github.io/?https://github.com/sqaxomonophonen/smd-pico-controller/blob/master/doc/pin_config.html)
+ - [`pin_config.html`](https://htmlpreview.github.io/?https://github.com/Datamuseum-DK/pico-smd-controller/blob/master/doc/pin_config.html)
  - [`pin_config.h`](pin_config.h)
 
 Drive documentation:
