@@ -1,0 +1,16 @@
+
+ - After commit 4fdefe2063a4bd5faeb7cedfa41cc18a0fd72225 (or thereabout?) the
+   codebase became more CR8044 specific, whereas before it was more generic.
+   Both of these "branches" are useful and ought to be "merged"; the specific
+   code makes high quality transfers, but can only be used for one format. The
+   generic code makes low quality / lossy transfers, but it makes no
+   assumptions on the layout, so it's useful for determining the sector format,
+   which is a prerequisite for writing a high quality transferer.
+
+ - The CR8044 code might be able to support any sector format that follows the
+   same overall gap-header-gap-data-gap structure
+
+ - Probably just have a big ringbuffer instead of:
+     uint8_t buffer[CLOCKED_READ_BUFFER_COUNT][MAX_DATA_BUFFER_SIZE];
+   Different transfer methods have different memory requirements.
+
