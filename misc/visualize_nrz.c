@@ -51,13 +51,14 @@ int main(int argc, char** argv)
 				const int bit_index = (row*width+x) + i*n_bits_per_track;
 				const int is_set = data[bit_index >> 3] & (1 << (7-(bit_index&7)));
 				char* p = &bitmap[((row*row_height+i)*width + x) * bpp];
+				const int tick = (x&63)==0;
 				if (is_set) {
 					p[0] = 255;
-					p[1] = 255;
+					p[1] = tick ? 0 : 255;
 					p[2] = 255;
 				} else {
 					p[0] = 0;
-					p[1] = 0;
+					p[1] = tick ? 255 : 0;
 					p[2] = 200;
 				}
 			}
