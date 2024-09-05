@@ -112,7 +112,7 @@ void sectorread_execute(uint8_t* dst)
 		absolute_time_t dt = get_absolute_time() - t0;
 		// NOTE: job should take at most 1/60 seconds
 		if (dt > 500000LL) {
-			printf(CPPP_INFO "ERROR: cr8044read_execute() stalled // FDEBUG=%lu FSTAT=%lu ADDR=%lu\n",
+			printf(CPPP_INFO "ERROR: sectorread_execute() stalled // FDEBUG=%lu FSTAT=%lu ADDR=%lu\n",
 				pio->fdebug,
 				pio->fstat,
 				pio->sm[sm].addr
