@@ -637,11 +637,12 @@ static void config_sectorread(void)
 	for (int i = 0; i < n_sectors; i++) {
 		const int bps = 10080; // bits per sector: (20160*8)/n_sectors
 		const int wait0 = 1;
-		const int data0 = 384-11;
+		const int data0 = 384-16;
 		const int wait1 = 64-wait0;
 		//384
 		//448
 		const int data1 = bps - (wait0+data0+wait1);
+		if (i == 0) printf("data0=%d/%.1f data1=%d/%.1f\n", data0, (double)data0/8.0, data1, (double)data1/8.0);
 		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, index++, wait0, data0);
 		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, index++, wait1, data1);
 	}
