@@ -520,7 +520,7 @@ void job_batch_read(void)
 					snprintf(
 						get_buffer_filename(buffer_index),
 						CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-						"cylinder%.4d-head%d-servo_%s-strobe_%s.cr8044nrz", cylinder, head,
+						"cylinder%.4d-head%d-servo_%s-strobe_%s.sectorreadnrz", cylinder, head,
 
 						servo_offset == -1 ? "negative" :
 						servo_offset ==  1 ? "positive" :
