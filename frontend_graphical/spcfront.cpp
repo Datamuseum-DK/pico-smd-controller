@@ -630,13 +630,20 @@ static void pop_danger_style(void)
 
 static void config_sectorread(void)
 {
-	const int n = 16;
-	com_enqueue("%s %d", CMDSTR_op_config_n_segments, n);
-	for (int i = 0; i < n; i++) {
-		const int bps = 10080;
-		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, 1, 344);
-		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, 32, bps-(32+344+1));
+	const int n_sectors = 16;
+	const int n_segments = 2*n_sectors;
+	com_enqueue("%s %d", CMDSTR_op_config_n_segments, n_segments);
+	int index = 0;
+	for (int i = 0; i < n_sectors; i++) {
+		const int bps = 10080; // bits per sector: (20160*8)/n_sectors
+		const int wait0 = 1;
+		const int data0 = 256;
+		const int wait1 = 64-wait0;
+		const int data1 = bps - (wait0+data0+wait1);
+		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, index++, wait0, data0);
+		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, index++, wait1, data1);
 	}
+	assert(index == n_segments);
 	com_enqueue("%s %d", CMDSTR_op_config_end);
 }
 
