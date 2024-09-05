@@ -1,6 +1,8 @@
+#include <stdio.h>
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
 
+#include "controller_protocol.h"
 #include "base.h"
 
 void set_led(int p)
@@ -53,5 +55,14 @@ void PANIC(uint32_t error)
 			}
 			sleep_ms(pause_ms);
 		}
+	}
+}
+
+void assert_handler(const char* msg, const char* file, int line)
+{
+	multicore_reset_core1();
+	while (1) {
+		printf(CPPP_ERROR "ASSERTION FAILED: %s as %s:%d\n", msg, file, line);
+		sleep_ms(2000);
 	}
 }

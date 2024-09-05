@@ -15,7 +15,8 @@
 #include "controller_protocol.h"
 #include "xop.h"
 #include "clocked_read.h"
-#include "cr8044read.h"
+//#include "cr8044read.h"
+#include "sectorread.h"
 
 #define ERROR_MASK                \
 	( (1 << GPIO_FAULT)       \
@@ -529,7 +530,7 @@ void job_batch_read(void)
 						data_strobe_delay ==  1 ? "late" :
 									  "neutral");
 
-					cr8044read_execute(get_buffer_data(buffer_index));
+					sectorread_execute(get_buffer_data(buffer_index));
 					wrote_buffer(buffer_index);
 				}
 			}

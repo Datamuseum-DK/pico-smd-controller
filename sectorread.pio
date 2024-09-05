@@ -1,0 +1,40 @@
+.program sectorread
+
+; must match pin_config.h
+.define  PUBLIC  READ_DATA    0
+.define  PUBLIC  READ_CLOCK   1
+.define  PUBLIC  INDEX        2
+.define  PUBLIC  SERVO_CLOCK  8
+
+    wait 1 gpio INDEX
+again:
+    set pins, 0 ; disable read
+
+    ; get wait bit count from OSR/TX-FIFO
+    pull
+    mov x, osr
+wait_loop:
+    wait 1 gpio SERVO_CLOCK ; using SERVO_CLOCK as clock
+    wait 0 gpio SERVO_CLOCK
+    jmp x-- wait_loop
+
+    ; get data bit count from OSR/TX-FIFO
+    pull
+    mov x, osr
+
+    ; enable read
+    set pins, 1
+
+    ; RE: read timing:
+    ;  - READ_DATA changes on 1->0 READ_CLOCK edge
+    ;  - The manual advices you to read data on 0->1 READ_CLOCK edge
+    ; see "Figure 3-58. Read PLO and Data Separator timing" in the manual.
+    ; this is important for the read/wait sequence below (`read, wait 0, wait
+    ; 1` caused the first bit to be read twice)
+data_loop:
+    wait 1 gpio READ_CLOCK ; using READ_CLOCK as clock
+    in pins, 1 ; ISR <- pins (1 bit)
+    wait 0 gpio READ_CLOCK
+    jmp x-- data_loop
+
+    jmp again

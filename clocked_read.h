@@ -6,7 +6,7 @@
 #include "drive.h"
 #include "controller_protocol.h"
 
-#define CLOCKED_READ_BUFFER_COUNT   4
+#define CLOCKED_READ_BUFFER_COUNT   3
 #define CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH (128)
 
 enum buffer_status {

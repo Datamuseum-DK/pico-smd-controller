@@ -628,6 +628,18 @@ static void pop_danger_style(void)
 	ImGui::PopStyleColor(3);
 }
 
+static void config_sectorread(void)
+{
+	const int n = 16;
+	com_enqueue("%s %d", CMDSTR_op_config_n_segments, n);
+	for (int i = 0; i < n; i++) {
+		const int bps = 10080;
+		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, 1, 344);
+		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, 32, bps-(32+344+1));
+	}
+	com_enqueue("%s %d", CMDSTR_op_config_end);
+}
+
 int main(int argc, char** argv)
 {
 	if (argc != 2 && argc != 3) {
@@ -643,8 +655,11 @@ int main(int argc, char** argv)
 	telemetry_log("BEGIN");
 	#endif
 
+
 	const int has_com = strcmp(argv[1], "") != 0;
 	if (has_com) com_startup(argv[1]);
+
+	config_sectorread();
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) SDL2FATAL();
 

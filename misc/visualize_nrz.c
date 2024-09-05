@@ -33,7 +33,8 @@ int main(int argc, char** argv)
 
 	assert(fclose(f) == 0);
 
-	const int width = 1536;
+	//const int width = 1536;
+	const int width = 1494;
 	const int n_compar = (sz+DRIVE_BYTES_PER_TRACK-1)/DRIVE_BYTES_PER_TRACK;
 	const int n_bits_per_track = 8*DRIVE_BYTES_PER_TRACK;
 	const int n_rows = (n_bits_per_track + width - 1) / width;

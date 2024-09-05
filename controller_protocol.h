@@ -14,22 +14,25 @@
 
 //              name                      argfmt
 #define EMIT_COMMANDS \
-	COMMAND(subscribe_to_status,      "b"        ) \
-	COMMAND(poll_gpio,                ""         ) \
-	COMMAND(set_ctrl,                 "u"        ) \
-	COMMAND(led,                      "b"        ) \
-	COMMAND(xfer_test,                "u"        ) \
-	COMMAND(loopback_test,            "u"        ) \
-	COMMAND(terminate_op,             ""         ) \
-	COMMAND(op_reset,                 ""         ) \
-	COMMAND(op_blink_test,            "u"        ) \
-	COMMAND(op_select_unit0,          ""         ) \
-	COMMAND(op_tag3_strobe,           "u"        ) \
-	COMMAND(op_select_cylinder,       "u"        ) \
-	COMMAND(op_broken_seek,           "u"        ) \
-	COMMAND(op_select_head,           "u"        ) \
-	COMMAND(op_read_data,             "uuu"      ) \
-	COMMAND(op_read_batch,            "uuuuii"   )
+	COMMAND(subscribe_to_status  , "b"      ) \
+	COMMAND(poll_gpio            , ""       ) \
+	COMMAND(set_ctrl             , "u"      ) \
+	COMMAND(led                  , "b"      ) \
+	COMMAND(xfer_test            , "u"      ) \
+	COMMAND(loopback_test        , "u"      ) \
+	COMMAND(terminate_op         , ""       ) \
+	COMMAND(op_reset             , ""       ) \
+	COMMAND(op_blink_test        , "u"      ) \
+	COMMAND(op_select_unit0      , ""       ) \
+	COMMAND(op_tag3_strobe       , "u"      ) \
+	COMMAND(op_select_cylinder   , "u"      ) \
+	COMMAND(op_broken_seek       , "u"      ) \
+	COMMAND(op_select_head       , "u"      ) \
+	COMMAND(op_read_data         , "uuu"    ) \
+	COMMAND(op_read_batch        , "uuuuii" ) \
+	COMMAND(op_config_n_segments , "u"      ) \
+	COMMAND(op_config_segment    , "uuu"    ) \
+	COMMAND(op_config_end        , ""       )
 
 // controller protocol payload prefixes: response from controller should begin
 // with one of these
@@ -100,7 +103,7 @@ enum tag3bit {
 	#undef BIT
 };
 
-#define MAX_DATA_BUFFER_SIZE (9+551+1)*32 // XXX should match cr8044read.h
+#define MAX_DATA_BUFFER_SIZE DRIVE_BYTES_PER_TRACK
 
 enum adjustment {
 	MINUS   = -1,

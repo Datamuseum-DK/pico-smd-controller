@@ -25,5 +25,8 @@ void blink(int on_ms, int off_ms);
 __attribute__ ((noreturn))
 void PANIC(uint32_t error);
 
+void assert_handler(const char* msg, const char* file, int line);
+#define ASSERT(p) if (!(p)) { assert_handler(#p, __FILE__, __LINE__); }
+
 #define BASE_H
 #endif
