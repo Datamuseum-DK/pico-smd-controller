@@ -1,0 +1,8 @@
+
+To build the Pico binaries on FreeBSD:
+ - Install `gcc-arm-embedded`, NOT `arm-none-eabi-gcc` like suggested
+ - Allow cmake to find it:
+   export PICO_TOOLCHAIN_PATH=/usr/local/gcc-arm-embedded
+Otherwise the build process is the same as on Linux.
+Source:
+https://forums.raspberrypi.com/viewtopic.php?t=311022
