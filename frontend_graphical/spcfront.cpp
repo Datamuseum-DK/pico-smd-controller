@@ -647,7 +647,7 @@ static void config_sectorread(void)
 		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, index++, wait1, data1);
 	}
 	assert(index == n_segments);
-	com_enqueue("%s %d", CMDSTR_op_config_end);
+	com_enqueue("%s", CMDSTR_op_config_end);
 }
 
 int main(int argc, char** argv)
