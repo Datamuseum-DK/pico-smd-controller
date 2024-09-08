@@ -181,7 +181,7 @@ static void job_begin(void)
 	is_job_polling = 1;
 }
 
-#define SECTORREAD_MAX_SEGMENTS (128)
+#define SECTORREAD_MAX_SEGMENTS (256)
 static int sectorread_n_segments;
 static struct segment sectorread_segments[SECTORREAD_MAX_SEGMENTS];
 

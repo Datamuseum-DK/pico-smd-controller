@@ -103,7 +103,8 @@ enum tag3bit {
 	#undef BIT
 };
 
-#define MAX_DATA_BUFFER_SIZE DRIVE_BYTES_PER_TRACK
+//#define MAX_DATA_BUFFER_SIZE DRIVE_BYTES_PER_TRACK
+#define MAX_DATA_BUFFER_SIZE 29762 // XXX hack due to configured sector format
 
 enum adjustment {
 	MINUS   = -1,

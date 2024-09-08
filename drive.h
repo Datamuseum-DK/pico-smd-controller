@@ -6,16 +6,19 @@
 //   Bytes/Cylinder            100 800           100 800
 //   Bytes/Spindle          41 428 800        82 958 400
 //   Cylinders/Spindle             411               823
-#define DRIVE_BYTES_PER_TRACK     (20160)
+//#define DRIVE_BYTES_PER_TRACK     (20160)
+#define DRIVE_BYTES_PER_TRACK     (30240)
 #define DRIVE_RPM                 (3600)
 #define DRIVE_RPS                 (DRIVE_RPM/60)
 
 #if 1
-#define DRIVE_CYLINDER_COUNT      (823) // CDC 9762
+//#define DRIVE_CYLINDER_COUNT      (823) // CDC 9762
+#define DRIVE_CYLINDER_COUNT      (711) // PA5N1E
 #else
 #define DRIVE_CYLINDER_COUNT      (411) // CDC 9760
 #endif
-#define DRIVE_HEAD_COUNT          (5)
+#define DRIVE_HEAD_COUNT          (24)
+//#define DRIVE_HEAD_COUNT          (16)
 
 // NOTE: sector count depends on dip switches on the drive itself; these define
 // how many clock cycles a sector consists of, and therefore how often the

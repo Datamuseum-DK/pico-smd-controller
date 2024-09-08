@@ -628,6 +628,7 @@ static void pop_danger_style(void)
 	ImGui::PopStyleColor(3);
 }
 
+#if 0
 static void config_sectorread(void)
 {
 	const int n_sectors = 16;
@@ -648,6 +649,102 @@ static void config_sectorread(void)
 	}
 	assert(index == n_segments);
 	com_enqueue("%s", CMDSTR_op_config_end);
+}
+#endif
+
+#if 0
+static void config_sectorread(void)
+{
+	const int n_segments = 1;
+	com_enqueue("%s %d", CMDSTR_op_config_n_segments, n_segments);
+	com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, 0, 1, 30240*8);
+	com_enqueue("%s", CMDSTR_op_config_end);
+}
+#endif
+
+
+static int format_n_bits, format_n_read_bits, format_n_segments;
+int format_segment_values[1<<12];
+
+static void begin_format(void)
+{
+	format_n_bits = 0;
+	format_n_read_bits = 0;
+	format_n_segments = 0;
+}
+
+static void format_segment(int wait, int read)
+{
+	format_segment_values[format_n_segments*2] = wait;
+	format_segment_values[format_n_segments*2+1] = read;
+	format_n_bits += (wait+read);
+	format_n_read_bits += read;
+	format_n_segments++;
+}
+
+static void end_format(int expect_n_bits)
+{
+	if (format_n_bits != expect_n_bits) {
+		fprintf(stderr, "expected %d bits, got %d\n", expect_n_bits, format_n_bits);
+		abort();
+	}
+	com_enqueue("%s %d", CMDSTR_op_config_n_segments, format_n_segments);
+	for (int i = 0; i < format_n_segments; i++) {
+		com_enqueue("%s %d %d %d", CMDSTR_op_config_segment, i, format_segment_values[i*2], format_segment_values[i*2+1]);
+	}
+	com_enqueue("%s", CMDSTR_op_config_end);
+}
+
+static void config_sectorread(void)
+{
+	// 515MB FSD PA5xx/PA5N1E harddisk; 30240 bytes per tracks;
+	// 96-sector format; 2 "weird sectors" + 94 "normal sectors";
+	// (30240*8)/96 = 2520 bits per sector
+
+	#if 0
+	const int n_weird_sectors = 2;
+	const int n_normal_sectors = 94;
+	const int n_sectors = n_weird_sectors + n_normal_sectors;
+	const int n_segments = 1 + 2 + n_normal_sectors*2; // XXX FIXME
+	int index = 0;
+	com_enqueue("%s %d", CMDSTR_op_config_n_segments, n_segments);
+	#endif
+
+	begin_format();
+
+	// First weird sector + 72 bits into second weird sector segment. In
+	// preliminary "raw read", I could find no inversion point in the first
+	// 2520+72 bits (I've visually inspected 100s of dumps).
+	format_segment(16, 2520+(72-16));
+
+	// Second weird sector; the first 72 weird bits were read by the
+	// previous segment. Wait 24 cycles, putting us at bit offset 72+24=96.
+	// Read until 16 bits after normal "end of address mark", 296+16+4;
+	format_segment(24, (296+16+4)-96);
+	// Wait 24, then read the rest of second weird sector.
+	format_segment(24, 2180);
+
+	// Remaining 94 "normal sectors", which seem to follow a common fixed
+	// pattern:
+	//  - Inversion points at bit offsets 16 and 328 (inversion points
+	//    occur when doing "raw reads" at places where the original disk
+	//    controller likely began writing a sector or address header/mark)
+	//  - Address header/mark seem to end at bit offset 296
+	//  - Data seems to start roughly at bit offset 408
+	for (int i = 0; i < 94; i++) {
+		/*
+		wait 16
+		read (296+4-16)=284
+		wait indtil p=328-4    (328-4)-(284+16)=24
+		read resten, 2520-(328-4)=2196
+		sanity check: 16+284+24+2196 = 2520
+		*/
+		format_segment(16, 284);
+		format_segment(24, 2196);
+	}
+	end_format(30240*8);
+
+	printf("expecting %d bits / %.1f bytes per read\n", format_n_read_bits, (double)format_n_read_bits / 8.0);
 }
 
 int main(int argc, char** argv)
