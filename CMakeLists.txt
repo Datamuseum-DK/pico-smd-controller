@@ -4,6 +4,7 @@ add_compile_options(-Wall)
 
 set(PICO_PLATFORM "rp2040")
 #set(PICO_PLATFORM "rp2350")
+#set(PICO_PLATFORM "rp2350-riscv") # not tested; requires building the toolchain myself on debian
 
 include(pico-sdk/pico_sdk_init.cmake)
 project(smd_pico_controller)
