@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 add_compile_options(-Wall)
 
 set(PICO_PLATFORM "rp2040")
+#set(PICO_PLATFORM "rp2350") # should work? :)
 
 include(pico-sdk/pico_sdk_init.cmake)
 project(smd_pico_controller)
