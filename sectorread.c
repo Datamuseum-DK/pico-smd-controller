@@ -9,7 +9,7 @@
 #include "pin_config.h"
 #include "controller_protocol.h"
 
-#define MAX_PULL_WORDS (256)
+#define MAX_PULL_WORDS (512) // XXX relates to SECTORREAD_MAX_SEGMENTS in controler.c (should be at least double of that value)
 static unsigned pull_words[MAX_PULL_WORDS];
 static int n_pull_words;
 static int n_total_bits;
