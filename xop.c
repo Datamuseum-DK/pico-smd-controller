@@ -461,6 +461,9 @@ void xop_select_head(unsigned head)
 unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned skip_checks)
 {
 	PANIC(PANIC_XXX); // doesn't currently make sense
+	// also XXX: PANIC() can only be called from core0 because it
+	// immediately calls multicore_reset_core1(), so trying to PANIC in
+	// xop.c is likely going to be "fun" to debug
 }
 
 
