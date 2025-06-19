@@ -83,10 +83,22 @@ static inline uint cr8044read_program_add_and_get_sm(PIO pio)
 void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 {
 	unsigned* wp = pull_words;
+	#if 0
 	const unsigned n_address_bits = 8*9;
 	const unsigned gap_a_wait = 32;
 	const unsigned gap_b_wait = 32;
 	const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5);
+	#endif
+
+	const unsigned gap_a_wait = 128;
+	//const unsigned n_address_bits = 72;
+	const unsigned n_address_bits = N_ADDRESS_MARK_BITS;
+
+	const unsigned gap_b_wait = 16;
+	//const unsigned n_data_bits = (((CR8044READ_DATA_SIZE+3)>>2) << 5);
+	//const unsigned n_data_bits = 2520-360;
+	const unsigned n_data_bits = N_DATA_BITS;
+
 	for (int i0 = 0; i0 < CR8044READ_N_SECTORS; i0++) {
 		// these are loaded into the PIO X-register and used for loop
 		// counting. since loops are "repeat and decrement if
@@ -106,6 +118,8 @@ void cr8044read_init(PIO _pio, uint _dma_channel, uint _dma_channel2)
 
 void cr8044read_execute(uint8_t* dst)
 {
+	ASSERT(dst != NULL);
+
 	pio_sm_set_enabled(pio, sm, false);
 
 	pio_gpio_init(pio, GPIO_BIT1);
@@ -149,21 +163,27 @@ void cr8044read_execute(uint8_t* dst)
 	pio_sm_set_enabled(pio, sm, true);
 
 	absolute_time_t t0 = get_absolute_time();
+	int timed_out = 0;
 	while (dma_channel_is_busy(dma_channel)) {
 		absolute_time_t dt = get_absolute_time() - t0;
 		// NOTE: job should take at most 1/60 seconds
 		if (dt > 500000LL) {
-			printf(CPPP_INFO "ERROR: cr8044read_execute() stalled // FDEBUG=%lu FSTAT=%lu ADDR=%lu\n",
-				pio->fdebug,
-				pio->fstat,
-				pio->sm[sm].addr
-				);
+			timed_out = 1;
 			break;
 		}
+		// TODO check for faults?
 	}
 	pio_sm_set_enabled(pio, sm, false);
 
 	// reset the effect of calling pio_gpio_init() above so that software
 	// can drive these pins again
 	gpio_set_function(GPIO_BIT1, GPIO_FUNC_SIO);
+
+	if (timed_out) {
+		printf(CPPP_INFO "ERROR: cr8044read_execute() stalled // FDEBUG=%lu FSTAT=%lu ADDR=%lu\n",
+			pio->fdebug,
+			pio->fstat,
+			pio->sm[sm].addr
+		);
+	}
 }

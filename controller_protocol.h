@@ -104,7 +104,8 @@ enum tag3bit {
 };
 
 //#define MAX_DATA_BUFFER_SIZE DRIVE_BYTES_PER_TRACK
-#define MAX_DATA_BUFFER_SIZE 29762 // XXX hack due to configured sector format
+//#define MAX_DATA_BUFFER_SIZE 29762 // XXX hack due to configured sector format
+#define MAX_DATA_BUFFER_SIZE (96*(8+256+8)) // XXX must match numbers in cr8044read.h
 
 enum adjustment {
 	MINUS   = -1,

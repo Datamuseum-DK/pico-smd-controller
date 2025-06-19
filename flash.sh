@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
+
 if [ -z "$1" ] ; then
 	echo "Usage: $0 </path/to/blockdevice>" > /dev/stderr
-	echo "(sudo's a lot; you may want to have a look inside before running)"
+	echo "(sudo/doas's a lot; you may want to have a look inside before running)"
 	exit 1
 fi
 cd $(dirname $0)
-set -e
+set -ev
 ./build.sh
 mnt="_picomnt"
 if mount | grep $mnt > /dev/null ; then
-	sudo umount $mnt
+	doas umount $mnt
 fi
 if [ -e "$mnt" ] ; then
-	sudo rm -rf $mnt
+	doas rm -rf $mnt
 fi
 mkdir $mnt
-sudo mount $1 $mnt
-sudo cp build/smd_pico_controller.uf2 $mnt/
+doas mount $1 $mnt
+doas cp build/smd_pico_controller.uf2 $mnt/
 sync
-sudo umount $mnt
-sudo rm -rf $mnt
+doas umount $mnt
+doas rm -rf $mnt

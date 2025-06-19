@@ -22,8 +22,7 @@ wait_loop:
     pull
     mov x, osr
 
-    ; enable read
-    set pins, 1
+    set pins, 1 ; enable read
 
     ; RE: read timing:
     ;  - READ_DATA changes on 1->0 READ_CLOCK edge

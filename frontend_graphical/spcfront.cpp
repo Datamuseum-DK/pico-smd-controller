@@ -186,7 +186,8 @@ static void telemetry_log_status(void)
 		RC(UNIT_SELECT_TAG),
 		RC(TAG1), RC(TAG2), RC(TAG3),
 		RC(BIT0), RC(BIT1), RC(BIT2), RC(BIT3), RC(BIT4), RC(BIT5), RC(BIT6), RC(BIT7), RC(BIT8), RC(BIT9),
-		RS(2), RS(3), RS(4), RS(5), RS(7), RS(8)
+		//RS(2), RS(3), RS(4), RS(5), RS(7), RS(8)
+		RS(0), RS(1), RS(2), RS(3), RS(4), RS(5)
 	);
 	#undef RS
 	#undef RC
@@ -240,6 +241,7 @@ static void com_printf(const char* fmt, ...)
 	char* msg = (char*)malloc(n+1);
 	memcpy(msg, buf, n+1);
 	arrput(com.controller_log, msg);
+	telemetry_log("COM_PRINTF: %s", msg);
 }
 
 static void bad_msg(char* msg)
@@ -257,6 +259,7 @@ static void com__handle_msg(char* msg)
 		pthread_rwlock_wrlock(&com.rwlock);
 		arrput(com.controller_log, msg);
 		pthread_rwlock_unlock(&com.rwlock);
+		telemetry_log("CPPP_LOG: %s", msg);
 	} else if (is_payload(msg, CPPP_FREQ, &tail)) {
 		uint32_t num = 0, value = 0;
 		if (sscanf(tail, " %u %u", &num, &value) == 2) {
@@ -663,6 +666,7 @@ static void config_sectorread(void)
 #endif
 
 
+#if 0
 static int format_n_bits, format_n_read_bits, format_n_segments;
 int format_segment_values[1<<12];
 
@@ -694,7 +698,9 @@ static void end_format(int expect_n_bits)
 	}
 	com_enqueue("%s", CMDSTR_op_config_end);
 }
+#endif
 
+#if 0
 static void config_sectorread(void)
 {
 	// 515MB FSD PA5xx/PA5N1E harddisk; 30240 bytes per tracks;
@@ -746,6 +752,22 @@ static void config_sectorread(void)
 
 	printf("expecting %d bits / %.1f bytes per read\n", format_n_read_bits, (double)format_n_read_bits / 8.0);
 }
+#endif
+
+#if 0
+static void config_sectorread(void)
+{
+	begin_format();
+	format_segment(16, 30240*8 - 16);
+	end_format(30240*8);
+}
+#endif
+
+void assert_handler(const char* msg, const char* file, int line)
+{
+	fprintf(stderr, "custom assertion failed at %s:%d :: %s\n", file, line, msg);
+	exit(EXIT_FAILURE);
+}
 
 int main(int argc, char** argv)
 {
@@ -766,7 +788,9 @@ int main(int argc, char** argv)
 	const int has_com = strcmp(argv[1], "") != 0;
 	if (has_com) com_startup(argv[1]);
 
+	#if 0
 	config_sectorread();
+	#endif
 
 	if (SDL_Init(SDL_INIT_VIDEO) != 0) SDL2FATAL();
 
@@ -835,6 +859,8 @@ int main(int argc, char** argv)
 	}
 	ImFont* font = io.Fonts->AddFontFromFileTTF("Inconsolata-Medium.ttf", font_size);
 	io.Fonts->Build();
+
+	ImGui::LoadIniSettingsFromDisk("settings.ini");
 
 	int exiting = 0;
 	while (!exiting) {
@@ -1347,6 +1373,10 @@ int main(int argc, char** argv)
 	SDL_DestroyWindow(window);
 
 	com_shutdown();
+
+	printf("exit!\n");
+
+	ImGui::SaveIniSettingsToDisk("settings.ini");
 
 	return EXIT_SUCCESS;
 }

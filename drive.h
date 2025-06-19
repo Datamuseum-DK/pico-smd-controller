@@ -17,6 +17,7 @@
 #else
 #define DRIVE_CYLINDER_COUNT      (411) // CDC 9760
 #endif
+
 #define DRIVE_HEAD_COUNT          (24)
 //#define DRIVE_HEAD_COUNT          (16)
 

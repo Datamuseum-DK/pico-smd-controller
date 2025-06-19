@@ -16,7 +16,7 @@
 #include "base64.h"
 #include "adler32.h"
 #include "loopback_test.h"
-#include "sectorread.h"
+//#include "sectorread.h"
 
 unsigned stdin_received_bytes;
 unsigned is_subscribing_to_status;
@@ -181,9 +181,11 @@ static void job_begin(void)
 	is_job_polling = 1;
 }
 
+#if 0
 #define SECTORREAD_MAX_SEGMENTS (256) // XXX relates to MAX_PULL_WORDS in sectorread.c (should not exceed half of that value)
 static int sectorread_n_segments;
 static struct segment sectorread_segments[SECTORREAD_MAX_SEGMENTS];
+#endif
 
 static int parse(void)
 {
@@ -315,6 +317,8 @@ static int parse(void)
 		job_begin();
 		xop_read_batch(cylinder0, cylinder1, head_set, n_32bit_words, servo_offset, data_strobe_delay);
 	} break;
+
+#if 0
 	case COMMAND_op_config_n_segments: {
 		const unsigned n_segments      = command_parser.arguments[0].u;
 		ASSERT(n_segments <= SECTORREAD_MAX_SEGMENTS);
@@ -334,6 +338,8 @@ static int parse(void)
 		}
 		sectorread_init(pio0, /*dma_channels=*/0,1, sectorread_n_segments, sectorread_segments);
 	} break;
+#endif
+
 	default: {
 		printf(CPPP_ERROR "unhandled command %s/%d\n",
 			command_to_string(command_parser.command),
@@ -361,12 +367,13 @@ int main()
 	#undef PIN
 
 	//clocked_read_init(pio0,  /*dma_channel=*/0);
-	//cr8044read_init(pio0,        /*dma_channels=*/0,1);
+	cr8044read_init(pio0,        /*dma_channels=*/0,1);
 	loopback_test_prep(pio1, /*dma_channel=*/2);
 
 	stdio_init_all();
 
-	blink(50, 0); // "Hi, we're up!"
+	// "Hi, we're up!"
+	for (int i = 0; i < 5; i++) blink(20, 30);
 
 	for (;;) {
 		for (int i = 0; i < 50; i++) {

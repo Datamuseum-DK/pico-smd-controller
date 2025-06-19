@@ -15,8 +15,8 @@
 #include "controller_protocol.h"
 #include "xop.h"
 #include "clocked_read.h"
-//#include "cr8044read.h"
-#include "sectorread.h"
+#include "cr8044read.h"
+//#include "sectorread.h"
 
 #define ERROR_MASK                \
 	( (1 << GPIO_FAULT)       \
@@ -46,6 +46,7 @@ static void unit0_select_tag(void)
 
 static void set_bits(unsigned value)
 {
+	//printf(CPPP_INFO "set_bits(%u)\n", value);
 	#define PUT(N) gpio_put(GPIO_BIT ## N, value & (1<<N))
 	PUT(0); PUT(1); PUT(2); PUT(3); PUT(4);
 	PUT(5); PUT(6); PUT(7); PUT(8); PUT(9);
@@ -198,7 +199,20 @@ static unsigned get_read_adjustment_bits(int servo_offset, int data_strobe_delay
 			: 0);
 	}
 
+	//ctrl = 0;
+	//ctrl |= TAG3BIT_ADDRESS_MARK_ENABLE;
+
 	return ctrl;
+}
+
+static void wait_for_on_cylinder(void)
+{
+	const unsigned bits = (1<<GPIO_ON_CYLINDER) | (1<<GPIO_SEEK_END);
+	// NOTE: drive doc says that "Seek End is a combination of ON CYL or
+	// SEEK ERROR" suggesting it's a simple OR-gate of those signals. But
+	// it's a good sanity check nevertheless (cable/drive may be broken).
+	pin_mask_wait(bits, bits, 1000000, 1);
+	sleep_us(100);
 }
 
 static void select_cylinder(unsigned cylinder)
@@ -209,11 +223,7 @@ static void select_cylinder(unsigned cylinder)
 	sleep_us(1000);
 	// NOTE: the drive should signal SEEK_ERROR (which IS caught by
 	// pin_mask_wait()) if the seek does not complete within 500ms
-	const unsigned bits = (1<<GPIO_ON_CYLINDER) | (1<<GPIO_SEEK_END);
-	// NOTE: drive doc says that "Seek End is a combination of ON CYL or
-	// SEEK ERROR" suggesting it's a simple OR-gate of those signals. But
-	// it's a good sanity check nevertheless (cable/drive may be broken).
-	pin_mask_wait(bits, bits, 1000000, 1);
+	wait_for_on_cylinder();
 	current_cylinder_according_to_the_controller = cylinder;
 }
 
@@ -469,11 +479,12 @@ unsigned xop_read_data(unsigned n_32bit_words, unsigned index_sync, unsigned ski
 
 /////////////////////////////////////////////////////////////////////////////
 // batch read ///////////////////////////////////////////////////////////////
-void job_batch_read(void)
+static void job_batch_read(void)
 {
 	BEGIN();
 	check_drive_error();
 	const unsigned cylinder0 = job_args.batch_read.cylinder0;
+	//const unsigned cylinder0 = 500;
 	const unsigned cylinder1 = job_args.batch_read.cylinder1;
 	const unsigned head_set = job_args.batch_read.head_set;
 	//const unsigned n_32bit_words_per_track = job_args.batch_read.n_32bit_words_per_track;
@@ -503,14 +514,22 @@ void job_batch_read(void)
 		//   Cylinder condition and it receives a Read or Write gate
 		//   from the controller."
 		unsigned mask = 1;
+		set_bits(0);
 		for (unsigned head = 0; head < DRIVE_HEAD_COUNT; head++, mask <<= 1) {
-			if ((head_set & mask) == 0) continue;
+		//for (unsigned head = 1; head < 4; head++, mask <<= 1) {
+			//if ((head_set & mask) == 0) continue;
 			select_head(head);
+			wait_for_on_cylinder();
 			set_bits(0);
 			gpio_put(GPIO_TAG3, 1);
+			wait_for_on_cylinder();
+			sleep_us(10000);
+
 			for (int servo_offset = servo_offset0; servo_offset <= servo_offset1; servo_offset++) {
 				for (int data_strobe_delay = data_strobe_delay0; data_strobe_delay <= data_strobe_delay1; data_strobe_delay++) {
 					set_bits(get_read_adjustment_bits(servo_offset, data_strobe_delay));
+					//wait_for_on_cylinder();
+					//sleep_us(100);
 
 					const absolute_time_t t0 = get_absolute_time();
 					while (!can_allocate_buffer()) {
@@ -523,7 +542,7 @@ void job_batch_read(void)
 					snprintf(
 						get_buffer_filename(buffer_index),
 						CLOCKED_READ_BUFFER_FILENAME_MAX_LENGTH,
-						"cylinder%.4d-head%.2d-servo_%s-strobe_%s.sectorreadnrz", cylinder, head,
+						"cylinder%.4d-head%.2d-servo_%s-strobe_%s.nrz", cylinder, head,
 
 						servo_offset == -1 ? "negative" :
 						servo_offset ==  1 ? "positive" :
@@ -533,12 +552,15 @@ void job_batch_read(void)
 						data_strobe_delay ==  1 ? "late" :
 									  "neutral");
 
-					sectorread_execute(get_buffer_data(buffer_index));
+					cr8044read_execute(get_buffer_data(buffer_index));
 					wrote_buffer(buffer_index);
+					sleep_us(100);
 				}
 			}
 			clear_output();
+			//break;//XXX
 		}
+		//break;//XXX
 	}
 	DONE();
 }
@@ -553,3 +575,15 @@ void xop_read_batch(unsigned cylinder0, unsigned cylinder1, unsigned head_set, u
 	job_args.batch_read.data_strobe_delay = data_strobe_delay;
 	run(job_batch_read);
 }
+
+#if 0
+static void job_xyzzy(void)
+{
+}
+
+void xop_xyzzy(void)
+{
+	reset_and_kill_output();
+	run(job_xyzzy);
+}
+#endif

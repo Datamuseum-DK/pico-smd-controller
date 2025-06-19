@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "hardware/dma.h"
 
 #include "clocked_read.h"
@@ -48,6 +50,7 @@ unsigned allocate_buffer(unsigned size)
 	buffer_status[i] = BUSY;
 	if (size > MAX_DATA_BUFFER_SIZE) size = MAX_DATA_BUFFER_SIZE;
 	buffer_size[i] = size;
+	memset(buffer[i], 0, MAX_DATA_BUFFER_SIZE);
 	return i;
 }
 

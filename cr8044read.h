@@ -45,12 +45,27 @@
 // M should be somewhere between 30 and 77. 30 is the "inversion point", and
 // past 77 the drive no longer has 75 zero bits for sync.
 
+#if 0
 // XXX should match controller_protocol.h
 #define CR8044READ_ADDRESS_SIZE (9)
 #define CR8044READ_DATA_SIZE (551+1)
 #define CR8044READ_BYTES_PER_SECTOR (CR8044READ_ADDRESS_SIZE+CR8044READ_DATA_SIZE)
 #define CR8044READ_N_SECTORS (32) // XXX read a little more
 #define CR8044READ_BYTES_TOTAL (CR8044READ_N_SECTORS * CR8044READ_BYTES_PER_SECTOR)
+#endif
+
+#if 0
+#define CR8044READ_ADDRESS_SIZE (9)
+#define CR8044READ_DATA_SIZE (551+1)
+#define CR8044READ_BYTES_PER_SECTOR (CR8044READ_ADDRESS_SIZE+CR8044READ_DATA_SIZE)
+#define CR8044READ_BYTES_TOTAL (CR8044READ_N_SECTORS * CR8044READ_BYTES_PER_SECTOR)
+#endif
+
+#define CR8044READ_N_SECTORS (96)
+
+#define N_ADDRESS_MARK_BITS (8*8) // XXX or 72?
+#define N_DATA_BITS (8*(256+8))
+#define CR8044READ_BYTES_TOTAL ((CR8044READ_N_SECTORS * (N_ADDRESS_MARK_BITS + N_DATA_BITS) + 7) >> 3)
 
 #include <stdint.h>
 #include "hardware/pio.h"
